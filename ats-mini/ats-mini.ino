@@ -1,3 +1,17 @@
+/* ************************************** */
+#define USE_MENU_reppr
+#if defined USE_MENU_reppr
+  #define DISABLE_REMOTE	// TODO: combine with menu
+
+  #define HAS_SOFTBOARD_MENU	// add softboard menu page	TODO: remove (too dangerous...)
+#endif
+
+#define USE_MORSE
+
+#include "DADA_debugging.h"	// TODO: remove later on
+/* ************************************** */
+
+
 // =================================
 // INCLUDE FILES
 // =================================
@@ -99,6 +113,78 @@ ButtonTracker pb1 = ButtonTracker();
 TFT_eSPI tft    = TFT_eSPI();
 TFT_eSprite spr = TFT_eSprite(&tft);
 SI4735_fixed rx;
+
+
+/* **************** Menu **************** */
+#if defined USE_MENU_reppr
+  class Menu;
+  /*
+    This version definines the menu INPUT routine int men_getchar();
+    and the menu OUTPUT streams
+    from the *program*
+    not inside the Menu class
+  */
+  #include <MENU.h>	// changed to all caps to distinguish from upstream menu
+  #include "menu_IO_configuration.h"
+
+  Menu MENU(32, 1, &men_getchar, Serial, MENU_OUTSTREAM2);
+  // Menu MENU(32, 1, &men_getchar, Serial, NULL);
+
+  #if defined HAS_SOFTBOARD_MENU	// add softboard menu page	TODO: remove (too dangerous...)
+    #include "softboard_page.h"
+  #endif
+#endif
+
+/* ************************************** */
+#if defined USE_MORSE
+#include "pulses_HARDWARE_conf.h"	// some HARDWARE must be known early	*can be managed by nvs*
+
+pulses_hardware_conf_t HARDWARE;	// hardware of this instrument
+
+void setup_HARDWARE_data() {
+#define MORSE_TOUCH_INPUT_PIN	11
+  //#define MORSE_OUTPUT_PIN	13
+
+#if CONFIG_IDF_TARGET_ESP32S3		// s3
+  #define TOUCH_THRESHOLD	1500	//   TODO: TEST&TRIM:
+#else					// other ESP32 boards;
+  #define TOUCH_THRESHOLD	61	//   TODO: TEST&TRIM:
+#endif
+
+  HARDWARE.morse_touch_input_pin	= MORSE_TOUCH_INPUT_PIN;
+  // HARDWARE.morse_output_pin		= MORSE_OUTPUT_PIN;
+  HARDWARE.touch_threshold		= TOUCH_THRESHOLD;
+} // setup_HARDWARE_data()
+
+
+// see. pulses.ino
+void ERROR_ln(const char* text) {	// extended error reporting on MENU, ePaper or OLED, etc
+  MENU.error_ln(text);
+#if defined HAS_DISPLAY
+  uint16_t len = strlen(text) + 5;	// "ERR " + text + '\0'
+  char* str = (char*) malloc(len);
+  if(str == NULL) {	// not even space for error message :(
+    MENU.error_ln(F("malloc() in ERROR_ln()!"));
+    return;		// we better return, heap is empty...
+  } // else
+  snprintf(str, len, F("ERR %s"), text);
+  extern void MC_display_message(const char*);
+  extern volatile bool avoid_error_recursion;
+  if(avoid_error_recursion) {
+    // MENU.error_ln(text);	// was already called above
+    avoid_error_recursion=false;
+  } else {	// *first* error
+    avoid_error_recursion = true;
+    MC_display_message(str);
+  }
+  free(str);
+#endif
+} // ERROR_ln() borrowed from pulses.ino
+
+  #include "morse.h"
+#endif
+/* ************************************** */
+
 
 //
 // Hardware initialization and setup
@@ -243,7 +329,22 @@ void setup()
 
   // Connect WiFi, if necessary
   netInit(wifiModeIdx);
+
+/* **************** Menu and morse **************** */
+#if defined USE_MORSE
+  setup_HARDWARE_data();
+  morse_init();
+#endif
+
+#if defined USE_MENU_reppr
+  MENU.add_page("Arduino Softboard", 'H', &softboard_display, &softboard_reaction, '+');
+
+  MENU.outln(F("Arduino Softboard\thttp://github.com/reppr/pulses/\n"));	// TODO: remove
+  MENU.menu_display();		// display menu at startup
+#endif
+  /* ************************************** */
 }
+
 
 //
 // Reads encoder via interrupt
@@ -693,6 +794,15 @@ void loop()
     encoderCount = direction? direction : encoderCount;
     if(revent & REMOTE_EEPROM) eepromRequestSave();
   }
+/* **************** Menu **************** */
+#else
+  #if defined USE_MENU_reppr
+    MENU.lurk_then_do();
+    #if defined HAS_SOFTBOARD_MENU
+      maybe_run_continuous();	// maybe display input pin state changes
+    #endif
+  #endif
+/* ************************************** */
 #endif
 
   // Block encoder rotation when in the locked sleep mode
@@ -912,9 +1022,23 @@ void loop()
     background_timer = currentTime;
   }
 
-  // Redraw screen if necessary
-  if(needRedraw) drawScreen();
+#if defined USE_MORSE
+  check_and_treat_morse_events_v3();
 
-  // Add a small default delay in the main loop
-  delay(5);
+  if(morse_trigger_KB_macro)
+    morse_PLAY_input_KB_macro();
+  else {
+    if(morse_output_char) {
+      DADA("morse_output_char in loop()");
+      MENU.out(morse_output_char);
+    } else {
+      // Add a small default delay in the main loop
+      delay(5);
+    }
+  }
+#endif
+
+  // Redraw screen if necessary
+  if(needRedraw)
+    drawScreen();
 }
