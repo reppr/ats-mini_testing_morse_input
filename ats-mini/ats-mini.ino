@@ -8,6 +8,13 @@
 
 #define USE_MORSE
 
+#if ! defined NOOP_FAKE_F_MACRO_INSTALLED	// probably obsolete, leave it in to make it more robust
+  #define NOOP_FAKE_F_MACRO_INSTALLED
+  #warning "using a NOOP fake F() macro."
+  #undef F
+  #define F(s)	((char*) (s))
+#endif
+
 #include "DADA_debugging.h"	// TODO: remove later on
 /* ************************************** */
 
@@ -117,18 +124,19 @@ SI4735_fixed rx;
 
 /* **************** Menu **************** */
 #if defined USE_MENU_reppr
-  class Menu;
+  class Menu_;
   /*
     This version definines the menu INPUT routine int men_getchar();
     and the menu OUTPUT streams
     from the *program*
     not inside the Menu class
   */
-  #include <MENU.h>	// changed to all caps to distinguish from upstream menu
+
+//#include <Menu_.h>	// changed to '<Menu_>' to distinguish from upstream menu	// *NOT* loading from the libraries folder
+  #include "Menu_.h"	// loads Menu_ library files from project directory		// loading from working directory
   #include "menu_IO_configuration.h"
 
-  Menu MENU(32, 1, &men_getchar, Serial, MENU_OUTSTREAM2);
-  // Menu MENU(32, 1, &men_getchar, Serial, NULL);
+  Menu_ MENU(32, 1, &men_getchar, Serial, MENU_OUTSTREAM2);
 
   #if defined HAS_SOFTBOARD_MENU	// add softboard menu page	TODO: remove (too dangerous...)
     #include "softboard_page.h"
@@ -150,7 +158,6 @@ void setup_HARDWARE_data() {
 #else					// other ESP32 boards;
   #define TOUCH_THRESHOLD	61	//   TODO: TEST&TRIM:
 #endif
-
   HARDWARE.morse_touch_input_pin	= MORSE_TOUCH_INPUT_PIN;
   // HARDWARE.morse_output_pin		= MORSE_OUTPUT_PIN;
   HARDWARE.touch_threshold		= TOUCH_THRESHOLD;
@@ -338,9 +345,7 @@ void setup()
 
 #if defined USE_MENU_reppr
   MENU.add_page("Arduino Softboard", 'H', &softboard_display, &softboard_reaction, '+');
-
-  MENU.outln(F("Arduino Softboard\thttp://github.com/reppr/pulses/\n"));	// TODO: remove
-  MENU.menu_display();		// display menu at startup
+  MENU.menu_display();		// display menu at startup	MAYBE, maybe not?
 #endif
   /* ************************************** */
 }

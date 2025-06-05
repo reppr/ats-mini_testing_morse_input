@@ -25,7 +25,7 @@
     #include "WProgram.h"
   #endif
 
-  #include <Menu.h>
+  #include <Menu_.h>
 
 #else
   #include <iostream>
@@ -43,7 +43,7 @@
   #warning Using Stream MACRO HACK when not on ARDUINO!
 #endif
 
-Menu::Menu(int bufSize, int menuPages, int (*maybeInput)(void), Stream & port, Stream & port2):
+Menu_::Menu_(int bufSize, int menuPages, int (*maybeInput)(void), Stream & port, Stream & port2):
   cb_size(bufSize),
   maybe_input(maybeInput),
   port_(port),
@@ -73,7 +73,7 @@ Menu::Menu(int bufSize, int menuPages, int (*maybeInput)(void), Stream & port, S
 #endif
 
 
-Menu::~Menu() {
+Menu_::~Menu_() {
   free(cb_buf);
   free(men_pages);
 }
@@ -85,7 +85,7 @@ Menu::~Menu() {
 /*
   cb_write() save a byte to the buffer:
   does *not* check if buffer is full				*/
-void Menu::cb_write(char value) {
+void Menu_::cb_write(char value) {
   int end = (cb_start + cb_count) % cb_size;
   cb_buf[end] = value;
   if (cb_count == cb_size)
@@ -98,7 +98,7 @@ void Menu::cb_write(char value) {
 /*
   cb_read() get oldest byte from the buffer:
   does *not* check if buffer is empty				*/
-char Menu::cb_read() {
+char Menu_::cb_read() {
   char value = cb_buf[cb_start];
   cb_start = (cb_start + 1) % cb_size;
   --cb_count;
@@ -108,12 +108,12 @@ char Menu::cb_read() {
 
 /* inlined:  see Menu.h
     // inlined:
-    int Menu::cb_stored() const {	// returns number of buffered bytes
+    int Menu_::cb_stored() const {	// returns number of buffered bytes
       return cb_count;
     }
 
     // inlined:
-    bool Menu::cb_is_full() const {
+    bool Menu_::cb_is_full() const {
       return cb_count == cb_size;
     }
 */
@@ -123,7 +123,7 @@ char Menu::cb_read() {
   // circ buf debugging:
 
   /* cb_info() debugging help					*/
-  void Menu::cb_info() const {
+  void Menu_::cb_info() const {
     out(F("\nBuffer:\t\t"));
     out(cb_buf);
 
@@ -173,7 +173,7 @@ char Menu::cb_read() {
 
 /* **************************************************************** */
 #ifdef ARDUINO
-/* void Menu::out(); overloaded menu output function family:	*/
+/* void Menu_::out(); overloaded menu output function family:	*/
 /*
   #define MEN_OUT(X)  ( port_.print((X)); port2_.print((X)) )	//  embedded ';' does not work
   see: https://wiki.sei.cmu.edu/confluence/display/c/PRE10-C.+Wrap+multistatement+macros+in+a+do-while+loop
@@ -192,28 +192,28 @@ char Menu::cb_read() {
     port2_.println((X)); \
   } while (0)
 
-  // Simple versions  void Menu::out():
-  void Menu::out(const char c)		const	{ MENU_OUT(c); }	// ARDUINO
-  void Menu::out(const int i)		const	{ MENU_OUT(i); }
-  void Menu::out(const long l)		const	{ MENU_OUT(l); }
-  void Menu::out(const char *str)	const	{ MENU_OUT(str); }	// c-style character string
-  void Menu::out(const String s)	const	{ MENU_OUT(s); }	// c++ String
+  // Simple versions  void Menu_::out():
+  void Menu_::out(const char c)		const	{ MENU_OUT(c); }	// ARDUINO
+  void Menu_::out(const int i)		const	{ MENU_OUT(i); }
+  void Menu_::out(const long l)		const	{ MENU_OUT(l); }
+  void Menu_::out(const char *str)	const	{ MENU_OUT(str); }	// c-style character string
+  void Menu_::out(const String s)	const	{ MENU_OUT(s); }	// c++ String
 
 #ifndef INTEGER_ONLY
-  void Menu::out(const double d)	const	{ MENU_OUT(d); }
+  void Menu_::out(const double d)	const	{ MENU_OUT(d); }
 #endif
 
   // unsigned versions:
-  void Menu::out(const unsigned char c)	const	{ MENU_OUT(c); }
-  void Menu::out(const unsigned int i)	const	{ MENU_OUT(i); }
-  void Menu::out(const unsigned long l)	const	{ MENU_OUT(l); }
+  void Menu_::out(const unsigned char c)	const	{ MENU_OUT(c); }
+  void Menu_::out(const unsigned int i)	const	{ MENU_OUT(i); }
+  void Menu_::out(const unsigned long l)	const	{ MENU_OUT(l); }
 
   // End of line versions  void outln():
-  void Menu::outln(const char c)	const	{ MENU_OUTln(c); }
-  void Menu::outln(const int i)		const	{ MENU_OUTln(i); }
-  void Menu::outln(const long l)	const	{ MENU_OUTln(l); }
-  void Menu::outln(const char *str)	const	{ MENU_OUTln(str); }	// c-style character string and newline
-  void Menu::outln(const String s)	const	{ MENU_OUTln(s); }	// c++ String and newline
+  void Menu_::outln(const char c)	const	{ MENU_OUTln(c); }
+  void Menu_::outln(const int i)		const	{ MENU_OUTln(i); }
+  void Menu_::outln(const long l)	const	{ MENU_OUTln(l); }
+  void Menu_::outln(const char *str)	const	{ MENU_OUTln(str); }	// c-style character string and newline
+  void Menu_::outln(const String s)	const	{ MENU_OUTln(s); }	// c++ String and newline
 
 // printf style output,  see:
 // https://stackoverflow.com/questions/1056411/how-to-pass-variable-number-of-arguments-to-printf-sprintf
@@ -224,7 +224,7 @@ char Menu::cb_read() {
    ments.   These  functions do not call the va_end macro.  Because they invoke the va_arg macro, the value of ap is undefined after
    the call.  See stdarg(3).
 */
-void Menu::printf(const char *format, ...) const {	// printf style output
+void Menu_::printf(const char *format, ...) const {	// printf style output
     va_list args;
     char txt[64] {0};
     va_start(args, format);
@@ -233,17 +233,17 @@ void Menu::printf(const char *format, ...) const {	// printf style output
   }
 
 #ifndef INTEGER_ONLY
-  void Menu::outln(const double d)	const	{ MENU_OUTln(d); }
+  void Menu_::outln(const double d)	const	{ MENU_OUTln(d); }
 #endif
 
   // unsigned versions:
-  void Menu::outln(const unsigned char c)	const	{ MENU_OUTln(c); }
-  void Menu::outln(const unsigned int i)	const	{ MENU_OUTln(i); }
-  void Menu::outln(const unsigned long l)	const	{ MENU_OUTln(l); }
+  void Menu_::outln(const unsigned char c)	const	{ MENU_OUTln(c); }
+  void Menu_::outln(const unsigned int i)	const	{ MENU_OUTln(i); }
+  void Menu_::outln(const unsigned long l)	const	{ MENU_OUTln(l); }
 
   // Print a value and pad with spaces to field width 'pad'.
   // At least one space will always be printed.
-  void Menu::pad(long value, unsigned int pad) const {
+  void Menu_::pad(long value, unsigned int pad) const {
     out(value);
     pad--;		// we need at least one chiffre
     if (value<0) {
@@ -264,18 +264,18 @@ void Menu::printf(const char *format, ...) const {	// printf style output
 
 #ifdef USE_F_MACRO
   // *DO* use Arduino F() MACRO for string output to save RAM:
-  void Menu::out(const __FlashStringHelper* str) const {
+  void Menu_::out(const __FlashStringHelper* str) const {
     MENU_OUT(str);
   }
 
   // End of line version:
   // Arduino F() macro: outln(F("string");
-  void Menu::outln(const __FlashStringHelper* str) const {
+  void Menu_::outln(const __FlashStringHelper* str) const {
     MENU_OUTln(str);
   }
 #endif
 
-  void Menu::out(const float f, int places)	const {	// formatted float output
+  void Menu_::out(const float f, int places)	const {	// formatted float output
 //    char c[16];
 //    sprintf(c, "%g", places);  // as the macro takes one argument convert to a string first
 //    MENU_OUT(c);
@@ -288,11 +288,11 @@ void Menu::printf(const char *format, ...) const {	// printf style output
 
 
   /* void ticked(char c)	Char output with ticks like 'A'	*/
-  void Menu::ticked(const char c) const {
+  void Menu_::ticked(const char c) const {
     MENU_OUT((char) 39); MENU_OUT(c); MENU_OUT((char) 39);
   }
 
-  void Menu::out_IstrI(const char *str)	const {		// output "|<c-str>|"
+  void Menu_::out_IstrI(const char *str)	const {		// output "|<c-str>|"
     out('|');
     out(str);
     out('|');
@@ -300,26 +300,26 @@ void Menu::printf(const char *format, ...) const {	// printf style output
 
   /* Output a newline, tab, space, '='
      ln(), tab(), space(), equals():			*/
-  void Menu::ln()     const { MENU_OUT('\n'); }	// output a newline
-  void Menu::ln(unsigned int n)  const {	// output n newlines
+  void Menu_::ln()     const { MENU_OUT('\n'); }	// output a newline
+  void Menu_::ln(unsigned int n)  const {	// output n newlines
     for (; n; n--)
       ln();
   }
-  void Menu::tab()    const { MENU_OUT('\t'); }	// output a tab
-  void Menu::tab(unsigned int n)  const {	// output n tabs
+  void Menu_::tab()    const { MENU_OUT('\t'); }	// output a tab
+  void Menu_::tab(unsigned int n)  const {	// output n tabs
     for (; n; n--)
       tab();
   }
-  void Menu::space()  const { MENU_OUT(' '); }	// output a space	// but telnet seems to eat some of them...
-  void Menu::space(unsigned int n)  const {	// output n spaces
+  void Menu_::space()  const { MENU_OUT(' '); }	// output a space	// but telnet seems to eat some of them...
+  void Menu_::space(unsigned int n)  const {	// output n spaces
     for (; n; n--)
       space();
   }
 
-  void Menu::equals() const { MENU_OUT('='); }	// Output char '='
-  void Menu::slash()  const { MENU_OUT('/'); }	// Output char '/'[1~
+  void Menu_::equals() const { MENU_OUT('='); }	// Output char '='
+  void Menu_::slash()  const { MENU_OUT('/'); }	// Output char '/'[1~
 
-  void Menu::IPstring(int ip) const {			// Output an IP as 192.168.1.2
+  void Menu_::IPstring(int ip) const {			// Output an IP as 192.168.1.2
     for(int i=0; i<4; i++) {
       MENU_OUT(ip & 0xff);
       ip >>= 8;
@@ -329,7 +329,7 @@ void Menu::printf(const char *format, ...) const {	// printf style output
   }
 
 
-void Menu::out_ON_off(bool flag) {	// output either " ON" or " off" depending flag
+void Menu_::out_ON_off(bool flag) {	// output either " ON" or " off" depending flag
   space();
   if(flag)
     MENU_OUT(F("ON"));
@@ -338,7 +338,7 @@ void Menu::out_ON_off(bool flag) {	// output either " ON" or " off" depending fl
 }
 
 
-bool Menu::maybe_display_more(unsigned char verbosity_level) {	// avoid too much output
+bool Menu_::maybe_display_more(unsigned char verbosity_level) {	// avoid too much output
   /* output control, avoid errors caused by serial menu output
      looks at verbosity *and* input buffer
      can be fooled to skip output by a terminating ',' on most input lines	*/
@@ -357,14 +357,14 @@ bool Menu::maybe_display_more(unsigned char verbosity_level) {	// avoid too much
 
 
 /* numeric input, calculating (left to right)				*/
-  int Menu::is_chiffre(char token) {		// is token a chiffre?
+  int Menu_::is_chiffre(char token) {		// is token a chiffre?
     if (token > '9' || token < '0')
       return false;
     return token;
   }
 
 
-  char Menu::is_operator(char token) {
+  char Menu_::is_operator(char token) {
     switch (token) {
     case '*':
     case '/':
@@ -382,7 +382,7 @@ bool Menu::maybe_display_more(unsigned char verbosity_level) {	// avoid too much
   }
 
 
-  bool Menu::get_numeric_input(unsigned long *result) {	// if there's a number, read it	// OBSOLETE? see: get_signed_number
+  bool Menu_::get_numeric_input(unsigned long *result) {	// if there's a number, read it	// OBSOLETE? see: get_signed_number
     char token = peek();
     if (!is_chiffre(token))	// no numeric input, return false
       return false;
@@ -399,7 +399,7 @@ bool Menu::maybe_display_more(unsigned char verbosity_level) {	// avoid too much
   }
 
 
-bool Menu::maybe_calculate_input(unsigned long *result) {	// OBSOLETE?: see: signed version calculate_input()
+bool Menu_::maybe_calculate_input(unsigned long *result) {	// OBSOLETE?: see: signed version calculate_input()
     /* check for & calculate integer input
        calculates simply left to right  */
     unsigned long scratch;	// see recursion
@@ -507,7 +507,7 @@ bool Menu::maybe_calculate_input(unsigned long *result) {	// OBSOLETE?: see: sig
   } // maybe_calculate_input()
 
 /*
-  bool Menu::string_match(const char * teststring)
+  bool Menu_::string_match(const char * teststring)
     check for a leading string match (skipping leading spaces) in the input buffer
     on a match  remove string (and leading spaces) from input and return true
 
@@ -515,7 +515,7 @@ bool Menu::maybe_calculate_input(unsigned long *result) {	// OBSOLETE?: see: sig
 
   the teststring itself can not begin with a string ;)
 */
-bool Menu::string_match(const char * teststring) {
+bool Menu_::string_match(const char * teststring) {
   int len;
   unsigned int leading_spaces = skip_spaces();	// remove leading spaces, can be restored
 
@@ -548,13 +548,13 @@ bool Menu::string_match(const char * teststring) {
   #if defined(GET_FREE_RAM)		// REAL free RAM functions:
     #if defined(ESP8266) || defined(ESP32)
       /* int get_free_RAM(): determine free RAM on ESP8266 and ESP32:	*/
-      int Menu::get_free_RAM() const {
+      int Menu_::get_free_RAM() const {
 	return ESP.getFreeHeap();
       }
 
     #else // ARDUINO, but not ESPxx
       /* int get_free_RAM(): determine free RAM on ARDUINO:		*/
-      int Menu::get_free_RAM() const {
+      int Menu_::get_free_RAM() const {
 	int free;
 	extern int __bss_end;
 	extern void *__brkval;
@@ -566,7 +566,7 @@ bool Menu::string_match(const char * teststring) {
       }
     #endif
 
-    void Menu::print_free_RAM() const {
+    void Menu_::print_free_RAM() const {
       out(F("free RAM: " ));
       out((int) get_free_RAM());
       out(F("\theap: "));
@@ -585,11 +585,11 @@ bool Menu::string_match(const char * teststring) {
 
   #else				// NOOP free RAM fakes only:
 
-    int Menu::get_free_RAM() const {		// noop fake
+    int Menu_::get_free_RAM() const {		// noop fake
       return -1;
     }
 
-    void Menu::print_free_RAM() const {		// noop fake
+    void Menu_::print_free_RAM() const {		// noop fake
     }
   #endif
 #else // OUTPUT functions  out() family for c++ Linux PC test version:
@@ -603,56 +603,56 @@ bool Menu::string_match(const char * teststring) {
   //	/* int men_getchar();
   //	   Read next char of menu input, if available.
   //	   Returns EOF32 or char.						*/
-  //	int Menu::men_getchar() { return getchar(); } // c++ Linux PC test version
+  //	int Menu_::men_getchar() { return getchar(); } // c++ Linux PC test version
 
-  /* void Menu::out(); overloaded menu output function family:	*/
-  // Simple versions  void Menu::out():
-  void Menu::out(const char c)		const	{ putchar(c); }
-  void Menu::out(const int i)		const	{ printf("%i", i); }
-  void Menu::out(const long l)		const	{ printf("%d", l); }
-  void Menu::out(const char *str)	const	{ printf("%s", str); }
+  /* void Menu_::out(); overloaded menu output function family:	*/
+  // Simple versions  void Menu_::out():
+  void Menu_::out(const char c)		const	{ putchar(c); }
+  void Menu_::out(const int i)		const	{ printf("%i", i); }
+  void Menu_::out(const long l)		const	{ printf("%d", l); }
+  void Menu_::out(const char *str)	const	{ printf("%s", str); }
 
   // unsigned versions:
-  void Menu::out(const unsigned char c)	const	{ putchar(c); }
-  void Menu::out(const unsigned int i)	const	{ printf("%u", i); }
-  void Menu::out(const unsigned long l)	const	{ printf("%u", l); }
+  void Menu_::out(const unsigned char c)	const	{ putchar(c); }
+  void Menu_::out(const unsigned int i)	const	{ printf("%u", i); }
+  void Menu_::out(const unsigned long l)	const	{ printf("%u", l); }
 
   // End of line versions  void outln():
-  void Menu::outln(const char c)	const	{ printf("%c\n", c); }
-  void Menu::outln(const int i)		const	{ printf("%i\n", i); }
-  void Menu::outln(const long l)	const	{ printf("%d\n", l); }
-  void Menu::outln(const char *str)	const   { printf("%s\n", str); }
+  void Menu_::outln(const char c)	const	{ printf("%c\n", c); }
+  void Menu_::outln(const int i)		const	{ printf("%i\n", i); }
+  void Menu_::outln(const long l)	const	{ printf("%d\n", l); }
+  void Menu_::outln(const char *str)	const   { printf("%s\n", str); }
 
   // unsigned versions:
-  void Menu::outln(const unsigned char c)	const { printf("%c\n", c); }
-  void Menu::outln(const unsigned int i)	const { printf("%u\n", i); }
-  void Menu::outln(const unsigned long l)	const { printf("%u\n", l); }
+  void Menu_::outln(const unsigned char c)	const { printf("%c\n", c); }
+  void Menu_::outln(const unsigned int i)	const { printf("%u\n", i); }
+  void Menu_::outln(const unsigned long l)	const { printf("%u\n", l); }
 
 
   // float output:
-  void Menu::out(const float f, int places)	const {	// formatted float output
+  void Menu_::out(const float f, int places)	const {	// formatted float output
     printf("%f", places);
   }
 
   /* Output a newline, tab, space, '='
      ln(), tab(), space(), equals():			*/
-  void Menu::ln()	const { putchar('\n'); } // Output a newline
-  void Menu::tab()	const { putchar('\t'); } // Output a tab
-  void Menu::space()	const { putchar(' '); }  // Output a space
-  void Menu::equals()	const { putchar('='); }  // Output char '='
+  void Menu_::ln()	const { putchar('\n'); } // Output a newline
+  void Menu_::tab()	const { putchar('\t'); } // Output a tab
+  void Menu_::space()	const { putchar(' '); }  // Output a space
+  void Menu_::equals()	const { putchar('='); }  // Output char '='
 
   /* void ticked(char c)	Char output with ticks like 'A'	*/
-  void Menu::ticked(const char c)	const {   // prints 'c'
+  void Menu_::ticked(const char c)	const {   // prints 'c'
     printf("\'%c\'", c);
   }
 
 
   /* NOOP free RAM fakes only:				*/
-  int Menu::get_free_RAM() const {		// noop fake
+  int Menu_::get_free_RAM() const {		// noop fake
     return -1;
   }
 
-  void Menu::print_free_RAM() const {		// noop fake
+  void Menu_::print_free_RAM() const {		// noop fake
   }
 
 #endif	// [ ARDUINO else ]  c++ test version	OUTPUT functions.
@@ -661,7 +661,7 @@ bool Menu::string_match(const char * teststring) {
 /* **************************************************************** */
 /* void out_BIN(unsigned long value, int bits)
    Print binary numbers with leading zeroes and a trailing space:   */
-void Menu::outBIN(unsigned long value, int bits ) const {
+void Menu_::outBIN(unsigned long value, int bits ) const {
   int i;
   unsigned long mask=0;
 
@@ -676,7 +676,7 @@ void Menu::outBIN(unsigned long value, int bits ) const {
 }
 
 // show one letter mnemonics for flag state and a trailing space
-void Menu::show_flag_mnemonics(unsigned long flags, int bits, const char* ON_chars, const char* OFF_chars) const {
+void Menu_::show_flag_mnemonics(unsigned long flags, int bits, const char* ON_chars, const char* OFF_chars) const {
   for (int i = bits - 1; i >= 0; i--) {
     if (flags & (1 << i))
       out(ON_chars[i]);
@@ -686,7 +686,7 @@ void Menu::show_flag_mnemonics(unsigned long flags, int bits, const char* ON_cha
   space();
 }
 
-void Menu::out_hex_chiffre(unsigned char chiffre) const { // output 1 hex chiffre
+void Menu_::out_hex_chiffre(unsigned char chiffre) const { // output 1 hex chiffre
   char c='?';
 
   if (chiffre < 10)
@@ -699,7 +699,7 @@ void Menu::out_hex_chiffre(unsigned char chiffre) const { // output 1 hex chiffr
 }
 
 // Print a uint32_t in hex:
-void Menu::out_hex(uint32_t n) const {			// uint32_t  hex output
+void Menu_::out_hex(uint32_t n) const {			// uint32_t  hex output
   char hex[11];
   sprintf(hex, "0x%02x", n);
   out(hex);
@@ -710,7 +710,7 @@ void Menu::out_hex(uint32_t n) const {			// uint32_t  hex output
   Print a sequence of ticked ascending hex chiffres: '0' '1' ... '9' 'a' 'b'
   Ends with a space.
 */
-void Menu::out_ticked_hexs(unsigned int count) const {
+void Menu_::out_ticked_hexs(unsigned int count) const {
   if (count>16)
     count=16;
 
@@ -760,7 +760,7 @@ value 1024	***************************************************************X
 value 1072	***************************************************************XXXX
 value 1104	***************************************************************XXXXXX
 */
-void Menu::bar_graph(long value, unsigned int scale, char c, bool newline /*=true*/) {
+void Menu_::bar_graph(long value, unsigned int scale, char c, bool newline /*=true*/) {
   const long length=64;
   int stars = (value * length) / (scale + 1) ;
 
@@ -801,7 +801,7 @@ void Menu::bar_graph(long value, unsigned int scale, char c, bool newline /*=tru
 
   if(newline)
     ln();
-} // Menu::bar_graph()
+} // Menu_::bar_graph()
 
 
 
@@ -809,18 +809,18 @@ void Menu::bar_graph(long value, unsigned int scale, char c, bool newline /*=tru
 // String recycling:
 
 // void OutOfRange(): output "out of range\n"
-void Menu::OutOfRange()	const { out(F("out of range\n")); }
+void Menu_::OutOfRange()	const { out(F("out of range\n")); }
 
-void Menu::out_Error_()	const { out(F("ERROR: ")); }
+void Menu_::out_Error_()	const { out(F("ERROR: ")); }
 
 // void error_ln(char * str): output "ERROR: xxxxxxxx"
-void Menu::error_ln(const char * str)	const {
+void Menu_::error_ln(const char * str)	const {
   out_Error_();
   outln(str);
 }
 
 // void ok_or_error_ln(char * str, errorflag): output "ERROR: xxxxxxxx nn" or "xxxxxxxx ok"
-void Menu::ok_or_error_ln(const char * str, int error) const {
+void Menu_::ok_or_error_ln(const char * str, int error) const {
   if(error) {
     out_Error_();
     out(str);
@@ -838,14 +838,14 @@ void Menu::ok_or_error_ln(const char * str, int error) const {
 }
 
 //  void out_comma_() const;	// output ", "  for parameter lists
-void Menu::out_comma_() const { out(F(", ")); }
+void Menu_::out_comma_() const { out(F(", ")); }
 
 
 // void out_selected_(): output "selected "
-void Menu::out_selected_() const { out(F("selected ")); }
+void Menu_::out_selected_() const { out(F("selected ")); }
 
 // void out_flags_(): output "\tflags "
-void Menu::out_flags_()	const { out(F("\tflags ")); }
+void Menu_::out_flags_()	const { out(F("\tflags ")); }
 
 /* **************************************************************** */
 // Buffer interface functions for parsing:
@@ -853,7 +853,7 @@ void Menu::out_flags_()	const { out(F("\tflags ")); }
 /*
   int get_next()
   get next input token and return it, or EOF8			*/
-int Menu::get_next() {
+int Menu_::get_next() {
   if(cb_count)
     return drop_input_token();
   // else
@@ -865,7 +865,7 @@ int Menu::get_next() {
   int peek()
   return EOF8 if buffer is empty, else
   return next char without removing it from buffer		*/
-int Menu::peek() const {
+int Menu_::peek() const {
   if (cb_count == 0)
     return EOF8;
 
@@ -878,7 +878,7 @@ int Menu::peek() const {
   like peek() with offset>0
   return EOF8 if token does not exist
   return next char without removing it from buffer		*/
-int Menu::peek(int offset) const {
+int Menu_::peek(int offset) const {
   if (cb_count <= offset)
     return EOF8;
 
@@ -887,7 +887,7 @@ int Menu::peek(int offset) const {
 
 
 /* void skip_spaces(): remove leading spaces from input buffer:	*/
-unsigned int Menu::skip_spaces() {
+unsigned int Menu_::skip_spaces() {
   unsigned int space_count=0;
   while (peek() == ' ') {  //  EOF8 != ' ' end of buffer case ok
     space_count++;
@@ -899,7 +899,7 @@ unsigned int Menu::skip_spaces() {
 /* uint8_t next_input_token()
    return next non space input token if any
    else return EOF8						*/
-uint8_t  Menu::next_input_token() const {
+uint8_t  Menu_::next_input_token() const {
   int token;
 
   for (int offset=0; offset<cb_count; offset++) {
@@ -920,7 +920,7 @@ uint8_t  Menu::next_input_token() const {
    drop next input token from the input and return it
    *no checks*
    only use if you must...					*/
-int Menu::drop_input_token() {
+int Menu_::drop_input_token() {
   return cb_read();
 }
 
@@ -929,14 +929,14 @@ int Menu::drop_input_token() {
    restores last input token and return it
    no checks
    only use if you *really must*				*/
-int Menu::restore_input_token() {	// restores last input token	only use if you *really must*
+int Menu_::restore_input_token() {	// restores last input token	only use if you *really must*
   cb_count++;				// *dangerous*	but you *can* restore a just-read-token
   cb_start = (cb_size + cb_start - 1) % cb_size;
 
   return cb_buf[cb_start];
 }
 
-bool Menu::check_next(char token) {	// check for token as next input, drop if found, return token *is* next
+bool Menu_::check_next(char token) {	// check for token as next input, drop if found, return token *is* next
   if(peek() == token) {
     drop_input_token();
     return true;
@@ -944,7 +944,7 @@ bool Menu::check_next(char token) {	// check for token as next input, drop if fo
   return false;
 }
 
-void Menu::play_KB_macro(const char *macro, bool newline) {	// most often you might do  'men_selected=0;'  before
+void Menu_::play_KB_macro(const char *macro, bool newline) {	// most often you might do  'men_selected=0;'  before
   out("play_KB_macro  ");
   outln(macro);
 
@@ -994,7 +994,7 @@ void Menu::play_KB_macro(const char *macro, bool newline) {	// most often you mi
      * disregard END tokens on empty buffer (left over from newline translation)
    return true if and only if the interpreter was called on the buffer.
  */
-bool Menu::lurk_then_do() {
+bool Menu_::lurk_then_do() {
   int INP;
   char c;
 
@@ -1106,7 +1106,7 @@ bool Menu::lurk_then_do() {
 /* bool is_numeric()
    true if there is a next numeric chiffre
    false on missing data or not numeric data			*/
-bool Menu::is_numeric() const {
+bool Menu_::is_numeric() const {
   int c = peek();
 
   if (c > '9' || c < '0')
@@ -1116,7 +1116,7 @@ bool Menu::is_numeric() const {
 }
 
 
-long Menu::numeric_input(long default_value) {
+long Menu_::numeric_input(long default_value) {
   long input, num, sign=1;
 
   skip_spaces();
@@ -1158,7 +1158,7 @@ long Menu::numeric_input(long default_value) {
 } // numeric_input()
 
 
-double Menu::float_input(double default_value) {
+double Menu_::float_input(double default_value) {
   double result=default_value;
 
   if(cb_count) {	// there *is* input
@@ -1195,7 +1195,7 @@ double Menu::float_input(double default_value) {
 } // float_input()
 
 
-bool Menu::get_signed_number(signed long *result) {	// if there's a number, read it
+bool Menu_::get_signed_number(signed long *result) {	// if there's a number, read it
   char token = peek();
   long sign=1L;
   if(token=='-') {		// '-' sign?
@@ -1226,7 +1226,7 @@ bool Menu::get_signed_number(signed long *result) {	// if there's a number, read
 } // get_signed_number()
 
 
-signed long Menu::calculate_input(signed long default_value) {
+signed long Menu_::calculate_input(signed long default_value) {
   static bool top_level=true;
   long result = default_value;
   long input_value;
@@ -1304,13 +1304,13 @@ signed long Menu::calculate_input(signed long default_value) {
 
 
 /* drop leading numeric sequence from the buffer:		*/
-void Menu::skip_numeric_input() {
+void Menu_::skip_numeric_input() {
   while ( is_numeric() )
     cb_read();
 }
 
 
-void Menu::skip_input() {
+void Menu_::skip_input() {
   if(peek() == EOF8)
     return;
   out(F("skipped: "));
@@ -1325,7 +1325,7 @@ void Menu::skip_input() {
 
 
 /* menu_page_info(char pg)  show a known pages' info	*/
-void Menu::menu_page_info(char pg) const {
+void Menu_::menu_page_info(char pg) const {
   if ( pg == men_selected )
     out('*');
   else
@@ -1338,7 +1338,7 @@ void Menu::menu_page_info(char pg) const {
 
 
 /* menu_pages_info()  show all known pages' info		*/
-void Menu::menu_pages_info() const {
+void Menu_::menu_pages_info() const {
   for (char pg = 0; pg < men_known; pg++)
     menu_page_info(pg);
 }
@@ -1347,7 +1347,7 @@ void Menu::menu_pages_info() const {
 /* **************************************************************** */
 // menu handling:
 
-int Menu::add_page(const char *pageTitle, const char page_key,		\
+int Menu_::add_page(const char *pageTitle, const char page_key,		\
 		     void (*pageDisplay)(void), bool (*pageReaction)(char), const char ActiveGroup) {
 
   // Delayed MALLOC ERROR CHECKING from constructor:
@@ -1394,10 +1394,10 @@ int Menu::add_page(const char *pageTitle, const char page_key,		\
 // menu display:
 
 /* Display menu	current menu page and common entries:		*/
-void Menu::menu_display() const {
+void Menu_::menu_display() const {
   char pg;
 #ifdef DEBUGGING_MENU
-  Menu::outln(F("\nmenu_display()"));
+  Menu_::outln(F("\nmenu_display()"));
 #endif
 
   ln();
@@ -1450,7 +1450,7 @@ void Menu::menu_display() const {
 
 
 /* **************************************************************** */
-void Menu::verbosity_info() {
+void Menu_::verbosity_info() {
   if (verbosity) {
     out(F("verbosity "));
     switch (verbosity) {
@@ -1471,12 +1471,12 @@ void Menu::verbosity_info() {
 }
 
 
-void Menu::outln_invalid() {
+void Menu_::outln_invalid() {
   outln(F("(invalid)"));
 }
 
 
-void Menu::out_noop() {
+void Menu_::out_noop() {
   out(F("noop"));
 }
 
@@ -1489,7 +1489,7 @@ void Menu::out_noop() {
 /* factored out:
    Not needed without debugging code.				*/
 // DEBUG: see: infos/internal/2019-08-20_backtrace.txt
-bool Menu::try_page_reaction(char pg, char token) {
+bool Menu_::try_page_reaction(char pg, char token) {
   bool did_something=(*men_pages[pg].interpret)(token);
 
 #ifdef DEBUGGING_MENU
@@ -1505,7 +1505,7 @@ bool Menu::try_page_reaction(char pg, char token) {
 }
 
 
-void Menu::interpret_men_input() {
+void Menu_::interpret_men_input() {
   char token, pg, page_group, selected_group;
   bool did_something, is_active;
 

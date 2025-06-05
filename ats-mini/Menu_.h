@@ -3,8 +3,8 @@
    Menu.h
 */
 /* **************************************************************** */
-#ifndef MENU_h
-#define MENU_h
+#ifndef MENU__h
+#define MENU__h
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -144,14 +144,14 @@ struct menupage {
 /* **************************************************************** */
 /* class Menu {}							*/
 
-class Menu {
+class Menu_ {
  public:
-  ~Menu();
+  ~Menu_();
 
 /* high level API:							*/
 
   // construct a Menu:
-  Menu(int size, int menuPages, int (*maybeInput)(void), STREAMTYPE & port, STREAMTYPE & port2);
+  Menu_(int size, int menuPages, int (*maybeInput)(void), STREAMTYPE & port, STREAMTYPE & port2);
 
   // "run-through" routine for main loop:
   bool lurk_then_do(void);
