@@ -391,8 +391,9 @@ void start_morse_feedback_d_pulse() {
 
 TaskHandle_t morse_input_feedback_handle;
 
-// #define MORSE_INPUT_DURATION_FEEDBACK_SHOW_STACK_USE	// DEBUGGING ONLY
-void morse_input_duration_feedback(void* dummy) {
+#if CONFIG_IDF_TARGET_ESP32	// version on classic ESP32 boards// #define MORSE_INPUT_DURATION_FEEDBACK_SHOW_STACK_USE	// DEBUGGING ONLY
+
+void morse_input_duration_feedback(void* dummy) {	// version: CONFIG_IDF_TARGET_ESP32
   if(touchRead(HARDWARE.morse_touch_input_pin) < HARDWARE.touch_threshold) {	// looks STILL TOUCHED
     vTaskDelay((TickType_t) (limit_dash_loong * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));
     //vTaskDelay((TickType_t) (dashTim * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));
@@ -405,12 +406,38 @@ void morse_input_duration_feedback(void* dummy) {
     }
   }
   morse_input_feedback_handle = NULL;
+ #if defined MORSE_INPUT_DURATION_FEEDBACK_SHOW_STACK_USE
+  MENU.out(F("morse_input_duration_feedback free STACK "));
+  MENU.outln(uxTaskGetStackHighWaterMark(NULL));
+ #endif
+  vTaskDelete(NULL);
+} // morse_input_duration_feedback()	// version: CONFIG_IDF_TARGET_ESP32
+
+#else // other board, not classic ESP32
+
+ #if CONFIG_IDF_TARGET_ESP32S3		// version on ESP32s3 boards// #define MORSE_INPUT_DURATION_FEEDBACK_SHOW_STACK_USE	// DEBUGGING ONLY
+void morse_input_duration_feedback(void* dummy) {	// version: CONFIG_IDF_TARGET_ESP32S3
+  if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+    vTaskDelay((TickType_t) (limit_dash_loong * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));
+    //vTaskDelay((TickType_t) (dashTim * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));
+    if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+      digitalWrite(HARDWARE.morse_output_pin, LOW);
+      vTaskDelay((TickType_t) 100 / portTICK_PERIOD_MS);
+
+      if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+	digitalWrite(HARDWARE.morse_output_pin, HIGH);
+      }
+    }
+  }
+  morse_input_feedback_handle = NULL;
 #if defined MORSE_INPUT_DURATION_FEEDBACK_SHOW_STACK_USE
   MENU.out(F("morse_input_duration_feedback free STACK "));
   MENU.outln(uxTaskGetStackHighWaterMark(NULL));
 #endif
   vTaskDelete(NULL);
-} // morse_input_duration_feedback()
+} // morse_input_duration_feedback()	// version: CONFIG_IDF_TARGET_ESP32S3
+ #endif	// CONFIG_IDF_TARGET_ESP32S3
+#endif	// which board?
 
 void trigger_token_duration_feedback() {
   BaseType_t err = xTaskCreatePinnedToCore(morse_input_duration_feedback,	// function
