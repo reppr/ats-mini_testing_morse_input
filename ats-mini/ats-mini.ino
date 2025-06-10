@@ -4,6 +4,7 @@
   #define DISABLE_REMOTE	// TODO: combine with menu
 
   #define HAS_SOFTBOARD_MENU	// add softboard menu page	TODO: remove (too dangerous...)
+  #define HAS_SIMPLE_ATS_MENU	// just a very first test, faking some remote codes
 #endif
 
 #define USE_MORSE
@@ -136,10 +137,14 @@ SI4735_fixed rx;
   #include "Menu_.h"	// loads Menu_ library files from project directory		// loading from working directory
   #include "menu_IO_configuration.h"
 
-  Menu_ MENU(32, 1, &men_getchar, Serial, MENU_OUTSTREAM2);
+  Menu_ MENU(32, 2, &men_getchar, Serial, MENU_OUTSTREAM2);
 
   #if defined HAS_SOFTBOARD_MENU	// add softboard menu page	TODO: remove (too dangerous...)
     #include "softboard_page.h"
+  #endif
+
+  #if defined HAS_SIMPLE_ATS_MENU
+    #include "ats_menupage.h"
   #endif
 #endif
 
@@ -344,7 +349,14 @@ void setup()
 #endif
 
 #if defined USE_MENU_reppr
-  MENU.add_page("Arduino Softboard", 'H', &softboard_display, &softboard_reaction, '+');
+  #if defined HAS_SIMPLE_ATS_MENU
+    MENU.add_page("ATS REMOTE MENU", 'A', &ats_menu_display, &ats_menu_reaction, 'A');
+  #endif
+
+  #if defined HAS_SOFTBOARD_MENU
+    MENU.add_page("Arduino Softboard", 'H', &softboard_display, &softboard_reaction, 'X');
+  #endif
+
   MENU.menu_display();		// display menu at startup	MAYBE, maybe not?
 #endif
   /* ************************************** */
