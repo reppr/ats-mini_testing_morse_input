@@ -4,6 +4,7 @@
 #include "Storage.h"
 #include "Utils.h"
 #include "Menu.h"
+#include "Draw.h"
 
 #include <WiFi.h>
 #include <WiFiUdp.h>
@@ -11,6 +12,7 @@
 #include <ESPAsyncWebServer.h>
 #include <NTPClient.h>
 #include <Preferences.h>
+#include <ESPmDNS.h>
 
 #define CONNECT_TIME  3000  // Time of inactivity to start connecting WiFi
 
@@ -120,31 +122,14 @@ char *getWiFiIPAddress()
   return strcpy(ip, WiFi.status()==WL_CONNECTED ? WiFi.localIP().toString().c_str() : "");
 }
 
-void drawWiFiIndicator(int x, int y)
-{
-  int8_t status = getWiFiStatus();
-
-  // If need to draw WiFi icon...
-  if(status || switchThemeEditor())
-  {
-    uint16_t color = (status>0) ? TH.wifi_icon_conn : TH.wifi_icon;
-
-    // For the editor, alternate between WiFi states every ~8 seconds
-    if(switchThemeEditor())
-      color = millis()&0x2000? TH.wifi_icon_conn : TH.wifi_icon;
-
-    spr.drawSmoothArc(x, 15+y, 14, 13, 150, 210, color, TH.bg);
-    spr.drawSmoothArc(x, 15+y, 9, 8, 150, 210, color, TH.bg);
-    spr.drawSmoothArc(x, 15+y, 4, 3, 150, 210, color, TH.bg);
-  }
-}
-
 //
 // Stop WiFi hardware
 //
 void netStop()
 {
   wifi_mode_t mode = WiFi.getMode();
+
+  MDNS.end();
 
   // If network connection up, shut it down
   if((mode==WIFI_STA) || (mode==WIFI_AP_STA))
@@ -214,6 +199,10 @@ void netInit(uint8_t netMode, bool showStatus)
   {
     // Initialize web server for remote configuration
     webInit();
+
+    // Initialize mDNS
+    MDNS.begin("atsmini"); // Set the hostname to "atsmini.local"
+    MDNS.addService("http", "tcp", 80);
   }
 }
 
@@ -260,7 +249,7 @@ static bool wifiInitAP()
 
   drawScreen(
     ("Use Access Point " + String(apSSID)).c_str(),
-    ("IP : " + WiFi.softAPIP().toString()).c_str()
+    ("IP : " + WiFi.softAPIP().toString() + " or atsmini.local").c_str()
   );
 
   ajaxInterval = 2500;
@@ -325,7 +314,7 @@ static bool wifiConnect()
     // WiFi connection succeeded
     drawScreen(
       ("Connected to WiFi network (" + WiFi.SSID() + ")").c_str(),
-      ("IP : " + WiFi.localIP().toString()).c_str()
+      ("IP : " + WiFi.localIP().toString() + " or atsmini.local").c_str()
     );
     // Done
     ajaxInterval = 1000;
