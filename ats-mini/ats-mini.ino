@@ -5,6 +5,7 @@
 
   #define HAS_SOFTBOARD_MENU	// add softboard menu page	TODO: remove (too dangerous...)
   #define HAS_SIMPLE_ATS_MENU	// just a very first test, faking some remote codes
+  #define HAS_D_MENU		// temporary menu debugging and developping
 #endif
 
 #define USE_MORSE
@@ -138,7 +139,7 @@ SI4735_fixed rx;
   #include "Menu_.h"	// loads Menu_ library files from project directory		// loading from working directory
   #include "menu_IO_configuration.h"
 
-  Menu_ MENU(32, 2, &men_getchar, Serial, MENU_OUTSTREAM2);
+  Menu_ MENU(32, 3, &men_getchar, Serial, MENU_OUTSTREAM2);
 
   #if defined HAS_SOFTBOARD_MENU	// add softboard menu page	TODO: remove (too dangerous...)
     #include "softboard_page.h"
@@ -147,6 +148,11 @@ SI4735_fixed rx;
   #if defined HAS_SIMPLE_ATS_MENU
     #include "ats_menupage.h"
   #endif
+
+  #if defined HAS_D_MENU
+    #include "D_menu_page.h"
+  #endif
+
 #endif
 
 /* ************************************** */
@@ -351,6 +357,10 @@ void setup()
 #endif
 
 #if defined USE_MENU_reppr
+  #if defined HAS_D_MENU
+    MENU.add_page("Developpers Menu", 'D', &D_menu_display, &D_menu_reaction, 'A');
+  #endif
+
   #if defined HAS_SIMPLE_ATS_MENU
     MENU.add_page("ATS REMOTE MENU", 'A', &ats_menu_display, &ats_menu_reaction, 'A');
   #endif
