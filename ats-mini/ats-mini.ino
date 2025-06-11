@@ -194,6 +194,7 @@ void ERROR_ln(const char* text) {	// extended error reporting on MENU, ePaper or
 #endif
 } // ERROR_ln() borrowed from pulses.ino
 
+  #include "morse_feedback.h"
   #include "morse.h"
 #endif
 /* ************************************** */
