@@ -8,6 +8,12 @@
 
 
 void D_menu_display() {
+  #if defined RUNNING_ON_ATS_MINI
+    MENU.outln(F("\tESP32-SI4732 Receiver"));
+  #else
+    DADA(F("unknown gadget"));
+  #endif
+
   MENU.outln(F("\tmorse feedback: X<nnn>\tY<nnn>\tR<nnn>"));
   MENU.outln(F("\tmorse feedback: 0\t.\t-\t!\tV"));
 }

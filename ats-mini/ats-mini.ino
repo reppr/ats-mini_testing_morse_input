@@ -1,4 +1,6 @@
 /* ************************************** */
+#define RUNNING_ON_ATS_MINI
+
 #define USE_MENU_reppr
 #if defined USE_MENU_reppr
   #define DISABLE_REMOTE	// TODO: combine with menu
@@ -9,6 +11,9 @@
 #endif
 
 #define USE_MORSE
+#if defined USE_MORSE
+  #define TOKEN_LENGTH_FEEDBACK_TASK
+#endif
 
 #if ! defined NOOP_FAKE_F_MACRO_INSTALLED	// probably obsolete, leave it in to make it more robust
   #define NOOP_FAKE_F_MACRO_INSTALLED
@@ -163,15 +168,15 @@ pulses_hardware_conf_t HARDWARE;	// hardware of this instrument
 
 void setup_HARDWARE_data() {
 #define MORSE_TOUCH_INPUT_PIN	11
-  //#define MORSE_OUTPUT_PIN	13
+  //#define MORSE_OUTPUT_PIN	13	// *NOT* used on ats-mini
 
-#if CONFIG_IDF_TARGET_ESP32S3		// s3
-  #define TOUCH_THRESHOLD	1500	//   TODO: TEST&TRIM:
-#else					// other ESP32 boards;
-  #define TOUCH_THRESHOLD	61	//   TODO: TEST&TRIM:
-#endif
+  #if CONFIG_IDF_TARGET_ESP32S3		// s3
+    #define TOUCH_THRESHOLD	1500	//   TODO: TEST&TRIM:
+  #else					// other ESP32 boards;
+    #define TOUCH_THRESHOLD	61	//   TODO: TEST&TRIM:
+  #endif
   HARDWARE.morse_touch_input_pin	= MORSE_TOUCH_INPUT_PIN;
-  // HARDWARE.morse_output_pin		= MORSE_OUTPUT_PIN;
+  // HARDWARE.morse_output_pin		= MORSE_OUTPUT_PIN;	// *NOT* used on ats-mini
   HARDWARE.touch_threshold		= TOUCH_THRESHOLD;
 } // setup_HARDWARE_data()
 
@@ -179,30 +184,30 @@ void setup_HARDWARE_data() {
 // see. pulses.ino
 void ERROR_ln(const char* text) {	// extended error reporting on MENU, ePaper or OLED, etc
   MENU.error_ln(text);
-#if defined HAS_DISPLAY
-  uint16_t len = strlen(text) + 5;	// "ERR " + text + '\0'
-  char* str = (char*) malloc(len);
-  if(str == NULL) {	// not even space for error message :(
-    MENU.error_ln(F("malloc() in ERROR_ln()!"));
-    return;		// we better return, heap is empty...
-  } // else
-  snprintf(str, len, F("ERR %s"), text);
-  extern void MC_display_message(const char*);
-  extern volatile bool avoid_error_recursion;
-  if(avoid_error_recursion) {
-    // MENU.error_ln(text);	// was already called above
-    avoid_error_recursion=false;
-  } else {	// *first* error
-    avoid_error_recursion = true;
-    MC_display_message(str);
-  }
-  free(str);
-#endif
+  #if defined HAS_DISPLAY
+    uint16_t len = strlen(text) + 5;	// "ERR " + text + '\0'
+    char* str = (char*) malloc(len);
+    if(str == NULL) {	// not even space for error message :(
+      MENU.error_ln(F("malloc() in ERROR_ln()!"));
+      return;		// we better return, heap is empty...
+    } // else
+    snprintf(str, len, F("ERR %s"), text);
+    extern void MC_display_message(const char*);
+    extern volatile bool avoid_error_recursion;
+    if(avoid_error_recursion) {
+      // MENU.error_ln(text);	// was already called above
+      avoid_error_recursion=false;
+    } else {	// *first* error
+      avoid_error_recursion = true;
+      MC_display_message(str);
+    }
+    free(str);
+  #endif
 } // ERROR_ln() borrowed from pulses.ino
 
   #include "morse_feedback.h"
   #include "morse.h"
-#endif
+#endif // USE_MORSE
 /* ************************************** */
 
 

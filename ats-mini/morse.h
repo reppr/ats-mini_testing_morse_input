@@ -269,7 +269,6 @@ typedef struct morse_seen_events_t {
   unsigned long time=0;
 } morse_seen_events_t;
 
-
 #if ! defined MORSE_EVENTS_MAX
   #define MORSE_EVENTS_MAX	256			// TODO: TEST&TRIMM:
 #endif
@@ -383,7 +382,6 @@ void start_morse_feedback_d_pulse() {
     PULSES.fix_global_next();
   } // else (no free pulse): just ignore
 } // start_morse_feedback_d_pulse()
-
   #else // no TOKEN_LENGTH_FEEDBACK_PULSE
     #if defined ESP32 && defined TOKEN_LENGTH_FEEDBACK_TASK	// experimental
 
@@ -416,17 +414,32 @@ void morse_input_duration_feedback(void* dummy) {	// version: CONFIG_IDF_TARGET_
 #else // other board, not classic ESP32
 
  #if CONFIG_IDF_TARGET_ESP32S3		// version on ESP32s3 boards// #define MORSE_INPUT_DURATION_FEEDBACK_SHOW_STACK_USE	// DEBUGGING ONLY
+
+#include <freertos/task.h>
+
+TaskHandle_t morse_input_feedback_handle;
 void morse_input_duration_feedback(void* dummy) {	// version: CONFIG_IDF_TARGET_ESP32S3
   if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
     vTaskDelay((TickType_t) (limit_dash_loong * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));
     //vTaskDelay((TickType_t) (dashTim * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));
     if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+#if defined RUNNING_ON_ATS_MINI
+      show_morse_duration_feedback('!');
+#else
       digitalWrite(HARDWARE.morse_output_pin, LOW);
       vTaskDelay((TickType_t) 100 / portTICK_PERIOD_MS);
-
+#endif
       if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+#if defined RUNNING_ON_ATS_MINI
+	;
+#else
 	digitalWrite(HARDWARE.morse_output_pin, HIGH);
+#endif
       }
+#if defined RUNNING_ON_ATS_MINI
+      else // not touched any more
+	show_morse_duration_feedback('0');
+#endif
     }
   }
   morse_input_feedback_handle = NULL;
@@ -498,7 +511,6 @@ void IRAM_ATTR touch_morse_ISR_v3() {	// ISR for  CONFIG_IDF_TARGET_ESP32 touch 
     trigger_token_duration_feedback();			// switch on
  #endif // TOKEN_LENGTH_FEEDBACK_TASK	// experimental
 #endif // MORSE_OUTPUT_PIN
-
   } else {							// >>>>>>>>>>>>>>>> looks RELEASED <<<<<<<<<<<<<<<<
     touch_pad_set_trigger_mode(TOUCH_TRIGGER_BELOW);		// wait for next touch
     morse_events_cbuf[morse_events_write_i].type = 0 /*released*/;
@@ -521,7 +533,6 @@ void IRAM_ATTR touch_morse_ISR_v3() {	// ISR for  CONFIG_IDF_TARGET_ESP32 touch 
  morse_isr_exit:
   portEXIT_CRITICAL_ISR(&morse_MUX);
 } // touch_morse_ISR_v3()	 CONFIG_IDF_TARGET_ESP32
-
 #elif CONFIG_IDF_TARGET_ESP32S3		// version on ESP32s3 boards
 
 void IRAM_ATTR touch_morse_ISR_v3() {	// ISR for CONFIG_IDF_TARGET_ESP32S3 touch sensor as morse input	*NEW VERSION 3*	  ESP32s3 variant
@@ -553,7 +564,21 @@ void IRAM_ATTR touch_morse_ISR_v3() {	// ISR for CONFIG_IDF_TARGET_ESP32S3 touch
     }
     trigger_token_duration_feedback();			// switch on
  #endif // TOKEN_LENGTH_FEEDBACK_TASK	// experimental
-#endif // MORSE_OUTPUT_PIN
+
+#else // no  MORSE_OUTPUT_PIN
+  #if defined RUNNING_ON_ATS_MINI
+    show_morse_duration_feedback('.');
+    #if defined TOKEN_LENGTH_FEEDBACK_TASK	// experimental
+       // stop_token_duration_feedback();			// assert it is off	// works better as inline:
+       if(morse_input_feedback_handle != NULL) {
+         vTaskDelete(morse_input_feedback_handle);
+         morse_input_feedback_handle = NULL;
+       }
+       trigger_token_duration_feedback();			// switch on
+    #endif // TOKEN_LENGTH_FEEDBACK_TASK	// experimental
+  #endif
+#endif // MORSE_OUTPUT_PIN  or  RUNNING_ON_ATS_MINI
+
 
   } else {							// >>>>>>>>>>>>>>>> RELEASED <<<<<<<<<<<<<<<<
     morse_events_cbuf[morse_events_write_i].type = 0 /*released*/;
@@ -569,7 +594,18 @@ void IRAM_ATTR touch_morse_ISR_v3() {	// ISR for CONFIG_IDF_TARGET_ESP32S3 touch
       vTaskDelete(morse_input_feedback_handle);
     morse_input_feedback_handle = NULL;
   #endif // TOKEN_LENGTH_FEEDBACK_TASK			// experimental rtos task
-#endif // MORSE_OUTPUT_PIN
+
+#else // no  MORSE_OUTPUT_PIN
+  #if defined RUNNING_ON_ATS_MINI
+    show_morse_duration_feedback('0');
+    #if defined TOKEN_LENGTH_FEEDBACK_TASK	// experimental
+      // stop_token_duration_feedback();			// works better as inline:
+      if(morse_input_feedback_handle != NULL)
+        vTaskDelete(morse_input_feedback_handle);
+      morse_input_feedback_handle = NULL;
+    #endif
+  #endif
+#endif // MORSE_OUTPUT_PIN  RUNNING_ON_ATS_MINI
   }
   morse_events_write_i++;
   morse_events_write_i %= MORSE_EVENTS_MAX;		// it's a ring buffer
