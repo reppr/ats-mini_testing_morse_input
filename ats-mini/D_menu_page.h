@@ -4,8 +4,19 @@
   temporary Debugging and Developing menu
 */
 
-#include "morse_feedback.h"
 
+extern int32_t morse_feedback_X;
+extern int32_t morse_feedback_Y;
+extern int32_t morse_feedback_H;
+extern int32_t morse_feedback_R;
+
+extern uint32_t morse_feedback_COLOR_OFF;
+extern uint32_t morse_feedback_COLOR_DOT;
+extern uint32_t morse_feedback_COLOR_DASH;
+extern uint32_t morse_feedback_COLOR_LOONG;
+extern uint32_t morse_feedback_COLOR_OVERLONG;
+
+extern void signal_morse_in(uint8_t token);
 
 void D_menu_display() {
   #if defined RUNNING_ON_ATS_MINI
@@ -43,23 +54,23 @@ bool D_menu_reaction(char token) {
     break;
 
   case '0':
-    show_morse_duration_feedback('0');
+    signal_morse_in('0');
     break;
     
   case '.':
-    show_morse_duration_feedback('.');
+    signal_morse_in('.');
     break;
     
   case '-':
-    show_morse_duration_feedback('-');
+    signal_morse_in('-');
     break;
     
   case '!':
-    show_morse_duration_feedback('!');
+    signal_morse_in('!');
     break;
     
   case 'V':
-    show_morse_duration_feedback('V');
+    signal_morse_in('V');
     break;
     
   default:

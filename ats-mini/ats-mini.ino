@@ -13,6 +13,7 @@
 #define USE_MORSE
 #if defined USE_MORSE
   #define TOKEN_LENGTH_FEEDBACK_TASK
+  #define MORSE_MODIFICATED_FEEDBACK	"morse_feedback_ATS-MINI_mod.h"
 #endif
 
 #if ! defined NOOP_FAKE_F_MACRO_INSTALLED	// probably obsolete, leave it in to make it more robust
@@ -205,7 +206,6 @@ void ERROR_ln(const char* text) {	// extended error reporting on MENU, ePaper or
   #endif
 } // ERROR_ln() borrowed from pulses.ino
 
-  #include "morse_feedback.h"
   #include "morse.h"
 #endif // USE_MORSE
 /* ************************************** */

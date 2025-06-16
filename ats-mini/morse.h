@@ -7,37 +7,21 @@
 
 #ifndef MORSE_H
 
-//#define MORSE_ePaper_DEBUG	// TODO: REMOVE
-
 #include <string.h>
 using std::string;
 
-//#define TOUCH_ISR_VERSION_2	// removed, see: morse_unused.txt
 #define TOUCH_ISR_VERSION_3	// other code removed, see: morse_unused.txt
 
-//#define TOKEN_LENGTH_FEEDBACK_PULSE	// using a pulse for morse duration feedback
-// or:
 #define TOKEN_LENGTH_FEEDBACK_TASK	// using a rtos task for morse duration feedback, experimental
 #define MORSE_DURATION_TASK_PRIORITY	2	// was: 0	// TODO: test&trim
 
-// sanity check:
-#if defined TOKEN_LENGTH_FEEDBACK_PULSE && defined TOKEN_LENGTH_FEEDBACK_TASK
-  #error morse.h: TOKEN_LENGTH_FEEDBACK_PULSE and TOKEN_LENGTH_FEEDBACK_TASK are both defined
-#endif
-
 #define COMPILE_MORSE_CHEAT_SHEETS	// ;)
-
-//#define DEBUG_TREAT_MORSE_EVENTS_V3
 
 #if ! defined MORSE_MONOCHROME_ROW
   #define MORSE_MONOCHROME_ROW	0	// row for monochrome morse display
 #endif
 
-//#define MORSE_DECODE_DEBUG	// tokens to letters, commands
-
-//#define MORSE_DEBUG_RECEIVE_TOKEN	// TODO: REMOVE: debugging code
-//#define MORSE_TOKEN_DEBUG		// low level token recognising debugging
-//#define DEBUG_MORSE_TOUCH_INTERRUPT
+//#define MORSE_DECODE_DEBUG	// tokens to letters, commands  REMOVED most of the code
 #define MORSE_COMPILE_HELPERS		// compile some functions for info, debugging, *can be left out*
 
 #include "driver/touch_pad.h"   // new ESP32-arduino version needs this for 'touch_pad_set_trigger_mode' declaration
@@ -46,13 +30,6 @@ using std::string;
 #if defined ESP32
   extern const char* esp_err_to_name(esp_err_t);
 #endif
-
-// ################ TODO: MOVE: configuration
-// use GPIO (with pulldown) as morse input?
-// #define MORSE_GPIO_INPUT_PIN	34	// Morse input GPIO pin, 34 needs hardware pulldown
-
-//#define MORSE_OUTPUT_PIN	2 // 2 is often blue onboard led, hang a led, a piezzo on that one :)
-//#define MORSE_OUTPUT_PIN	12 // *one shot TEST ONLY*	// TODO: separe from PERIPHERAL_POWER_SWITCH_PIN
 
 #ifndef MORSE_TOUCH_INPUT_PIN		// TODO: be more flexible
   #define MORSE_TOUCH_INPUT_PIN	13	// use ESP32 touch sensor as morse input	(13 just a test)
@@ -224,8 +201,7 @@ uint8_t morse_expected_Tims(char token) {	// ATTENTION: returns 0 for unknown/un
 }
 
 
-#if defined DEBUG_MORSE_TOUCH_INTERRUPT // REMOVE: debug only ################
-void morse_debug_token_info() {		// a *lot* of debug info...
+void morse_debug_token_info() {		// DEBUG ONLY	// a *lot* of debug info...
   char token;
 
   if(morse_token_cnt) {
@@ -250,7 +226,6 @@ void morse_debug_token_info() {		// a *lot* of debug info...
     MENU.outln(">>>done\n");
   }
 } // morse_debug_token_info()
-#endif	// DEBUG_MORSE_TOUCH_INTERRUPT
 
 
 /* **************************************************************** */
@@ -261,13 +236,14 @@ void morse_debug_token_info() {		// a *lot* of debug info...
 void morse_stats_gather(char token, float duration);	// forwards declaration
 
 #if defined MORSE_TOUCH_INPUT_PIN
-#if defined TOUCH_ISR_VERSION_3	// currently used version, removed older implementations
+#if defined TOUCH_ISR_VERSION_3	// currently used version, removed all older implementations
 
 // data structure to save morse touch events from touch_morse_ISR_v3():
 typedef struct morse_seen_events_t {
   int type=0;		// 0 is UNTOUCHED	1 is ON
   unsigned long time=0;
 } morse_seen_events_t;
+
 
 #if ! defined MORSE_EVENTS_MAX
   #define MORSE_EVENTS_MAX	256			// TODO: TEST&TRIMM:
@@ -281,8 +257,339 @@ volatile bool too_many_events=false;			// error flag set by touch_morse_ISR_v3()
 unsigned long morse_letter_separation_expected=0L;	// flag or time of automatic letter separation
 							//		after input stays idle, untouched
 
-#if defined DEBUG_TREAT_MORSE_EVENTS_V3
-void show_morse_event_buffer() {	// debugging only
+/* ******************************************************************************** */
+#if defined MORSE_MODIFICATED_FEEDBACK	// special morse input feedback, like on a fast screen, i.e. ats-mini
+  #include MORSE_MODIFICATED_FEEDBACK
+
+#else // compile inbuilt version based on MORSE_OUTPUT_PIN LED feedback
+
+#if defined ESP32 && defined TOKEN_LENGTH_FEEDBACK_TASK	// experimental
+
+#include <freertos/task.h>
+
+TaskHandle_t morse_input_feedback_handle;
+extern void trigger_token_duration_feedback();
+
+void /*IRAM_ATTR*/ signal_morse_in(uint8_t token) {
+  switch(token) {
+  case 'X':	// STOP task and signal OFF
+#if defined TOKEN_LENGTH_FEEDBACK_TASK	// experimental
+    if(morse_input_feedback_handle != NULL) {
+      vTaskDelete(morse_input_feedback_handle);
+      morse_input_feedback_handle = NULL;
+    }
+#endif
+  case '0':	// switch signal OFF
+    digitalWrite(HARDWARE.morse_output_pin, LOW);
+    //    spr.fillCircle(morse_feedback_X, morse_feedback_Y, morse_feedback_R, morse_feedback_COLOR_OFF);
+    //    drawText("     ", morse_feedback_X, morse_feedback_Y, 1);
+    break;
+
+  case 'S':	// START stop a running task, START a new one and signal ON
+#if defined TOKEN_LENGTH_FEEDBACK_TASK	// experimental
+    if(morse_input_feedback_handle != NULL) {	// STOP if still running
+      vTaskDelete(morse_input_feedback_handle);
+      morse_input_feedback_handle = NULL;
+    }
+    trigger_token_duration_feedback();		// START again
+#endif // TOKEN_LENGTH_FEEDBACK_TASK	// experimental
+  case '+':	// just switch the signal on
+  case '.':	// signal ON	// i.e. start a dot
+    digitalWrite(HARDWARE.morse_output_pin, HIGH);		// feedback: pin is TOUCHED, LED on
+    //    drawText("ON", morse_feedback_X, morse_feedback_Y, 1);
+    //    spr.fillCircle(morse_feedback_X, morse_feedback_Y, morse_feedback_R, morse_feedback_COLOR_DOT);
+    break;
+
+//  other implementations might need that, so code left in here.  see: MORSE_MODIFICATED_FEEDBACK
+//  case '-':	// start a dash
+//    // noop on MORSE_OUTPUT_PIN
+//    //    drawText("DASH", morse_feedback_X, morse_feedback_Y, 1);
+//    //    spr.fillCircle(morse_feedback_X, morse_feedback_Y, morse_feedback_R, morse_feedback_COLOR_DASH);
+//    break;
+//  case '!':	// start a loong
+//    // noop on MORSE_OUTPUT_PIN
+//    //    drawText("LOONG", morse_feedback_X, morse_feedback_Y, 1);
+//    //    spr.fillCircle(morse_feedback_X, morse_feedback_Y, morse_feedback_R, morse_feedback_COLOR_LOONG);
+//    break;
+//  case 'V':	// start a overloong
+//    // noop on MORSE_OUTPUT_PIN
+//    //    drawText("_____", morse_feedback_X, morse_feedback_Y, 1);
+//    //    spr.fillCircle(morse_feedback_X, morse_feedback_Y, morse_feedback_R, morse_feedback_COLOR_OVERLONG);
+//    break;
+
+  default:
+    DADA(F("invalid token"));
+    //  MENU.error_ln(F("invalid duration"));
+  }
+} // signal_morse_in(token)
+
+
+/* **************************************  classic ESP32  ****************************************** */
+#if CONFIG_IDF_TARGET_ESP32	// version on classic ESP32 boards
+
+// #define MORSE_INPUT_DURATION_FEEDBACK_SHOW_STACK_USE	// DEBUGGING ONLY
+void morse_input_duration_feedback(void* dummy) {	// version: CONFIG_IDF_TARGET_ESP32 classic
+  /*
+    give status feedback while the morse key is pressed: when is DASH complete and LOONG has started?  etc
+  */
+  // signal_morse_in('S');  was called by touch_morse_ISR_v3()
+  if(touchRead(HARDWARE.morse_touch_input_pin) < HARDWARE.touch_threshold) {	// looks STILL TOUCHED
+    //vTaskDelay((TickType_t) (dashTim * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));		// ignore beginning of the DASH
+
+    vTaskDelay((TickType_t) (limit_dash_loong * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));	// react on LOONG now
+    if(touchRead(HARDWARE.morse_touch_input_pin) < HARDWARE.touch_threshold) {	// looks STILL TOUCHED
+#if defined MORSE_OUTPUT_PIN				// blinkOFF as a sign OVERLONG has been reached
+      // *ONLY* MAKES SENSE WITH A LED OUTPUT: MORSE_OUTPUT_PIN
+      signal_morse_in('0');	// '0' means just switch signal OFF for a short blinkOFF
+      vTaskDelay((TickType_t) 100 / portTICK_PERIOD_MS);				// blinkOFF when dash has ended
+      if(touchRead(HARDWARE.morse_touch_input_pin) < HARDWARE.touch_threshold) {	// looks STILL TOUCHED, is LOONG and then OVERLONG
+	signal_morse_in('+');	// '+' means just switch signal ON again
+      }
+      // else  signal_morse_in('X');	// 'X' means STOP task and signal OFF	will be called by touch_morse_ISR_v3()
+#endif // MORSE_OUTPUT_PIN
+    }
+  }
+  morse_input_feedback_handle = NULL;
+ #if defined MORSE_INPUT_DURATION_FEEDBACK_SHOW_STACK_USE	// DEBUGGING ONLY
+  MENU.out(F("morse_input_duration_feedback free STACK "));
+  MENU.outln(uxTaskGetStackHighWaterMark(NULL));
+ #endif
+  vTaskDelete(NULL);
+} // morse_input_duration_feedback()	// version: CONFIG_IDF_TARGET_ESP32 classic
+
+void IRAM_ATTR touch_morse_ISR_v3() {	// ISR for CONFIG_IDF_TARGET_ESP32 classic  touch morse input
+  unsigned long now = micros();
+
+  portENTER_CRITICAL_ISR(&morse_MUX);
+  unsigned long next_index = morse_events_write_i + 1;
+  next_index %= MORSE_EVENTS_MAX;
+
+  if(next_index == morse_events_read_i) {		// buffer full?
+    too_many_events = true;				//   ERROR too_many_events
+    goto morse_isr_exit;				//	   return
+  }
+
+  morse_events_cbuf[morse_events_write_i].time = now;	// save time
+
+  // >>>>>>>>>>>>>>>> looks TOUCHED? <<<<<<<<<<<<<<<<
+  if(touchRead(HARDWARE.morse_touch_input_pin) < HARDWARE.touch_threshold) {
+    touch_pad_set_trigger_mode(TOUCH_TRIGGER_ABOVE);		// wait for touch release
+    morse_events_cbuf[morse_events_write_i].type = 1 /*touched*/;
+    signal_morse_in('S');		// 'S' means START a new token
+
+    // >>>>>>>>>>>>>>>> looks RELEASED? <<<<<<<<<<<<<<<<
+  } else {
+    touch_pad_set_trigger_mode(TOUCH_TRIGGER_BELOW);		// wait for next touch
+    morse_events_cbuf[morse_events_write_i].type = 0 /*released*/;
+    signal_morse_in('X');	// 'X' means STOP task and signal OFF
+  }
+
+  morse_events_write_i++;
+  morse_events_write_i %= MORSE_EVENTS_MAX;		// it's a ring buffer
+
+ morse_isr_exit:
+  portEXIT_CRITICAL_ISR(&morse_MUX);
+} // touch_morse_ISR_v3()	 CONFIG_IDF_TARGET_ESP32 classic
+
+
+
+/* **************************************    ESP32s3 version    ****************************************** */
+#elif CONFIG_IDF_TARGET_ESP32S3		// s3 version on ESP32s3 boards
+
+// #define MORSE_INPUT_DURATION_FEEDBACK_SHOW_STACK_USE	// DEBUGGING ONLY
+void morse_input_duration_feedback(void* dummy) {	// s3 version: CONFIG_IDF_TARGET_ESP32S3
+  /*
+    give status feedback while the morse key is pressed: when is DASH complete and LOONG has started?  etc
+  */
+  // signal_morse_in('S');	'S' means START new task and signal ON	// was called by touch_morse_ISR_v3()
+  if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+    //vTaskDelay((TickType_t) (dashTim * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));	// ignore beginning of the DASH
+
+    vTaskDelay((TickType_t) (limit_dash_loong * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));	// react on LOONG now
+    if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+#if defined MORSE_OUTPUT_PIN				// blinkOFF as a sign LOONG has been reached
+      // *ONLY* MAKES SENSE WITH A LED OUTPUT: MORSE_OUTPUT_PIN
+      signal_morse_in('0');	// '0' means just switch signal		// OFF for a short blinkOFF
+      vTaskDelay((TickType_t) 100 / portTICK_PERIOD_MS);		// blinkOFF when dash has ended
+      if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED, is in LOONG and then OVERLONG
+	signal_morse_in('+');	// '+' means just switch signal ON again
+      }
+      // else  signal_morse_in('X');	// 'X' means STOP task and signal OFF	will be called by touch_morse_ISR_v3()
+#endif // MORSE_OUTPUT_PIN
+    }
+  }
+  morse_input_feedback_handle = NULL;
+  #if defined MORSE_INPUT_DURATION_FEEDBACK_SHOW_STACK_USE	// DEBUGGING ONLY
+    MENU.out(F("morse_input_duration_feedback free STACK "));
+    MENU.outln(uxTaskGetStackHighWaterMark(NULL));
+  #endif
+  vTaskDelete(NULL);
+} // morse_input_duration_feedback()	// version: CONFIG_IDF_TARGET_ESP32S3
+
+
+void IRAM_ATTR touch_morse_ISR_v3() {	// s3 ISR for CONFIG_IDF_TARGET_ESP32S3 touch sensor as morse input	*NEW VERSION 3*	  ESP32s3 variant
+  unsigned long now = micros();
+
+  portENTER_CRITICAL_ISR(&morse_MUX);
+  unsigned long next_index = morse_events_write_i + 1;
+  next_index %= MORSE_EVENTS_MAX;
+
+  if(next_index == morse_events_read_i) {		// buffer full?
+    too_many_events = true;				//   ERROR too_many_events
+    goto morse_isr_exit;				//	   return
+  }
+
+  morse_events_cbuf[morse_events_write_i].time = now;	// save time
+
+  // >>>>>>>>>>>>>>>> TOUCHED? <<<<<<<<<<<<<<<<
+  if (touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {
+    morse_events_cbuf[morse_events_write_i].type = 1 /*touched*/;
+    signal_morse_in('S');		// 'S' means START a new token
+
+  // >>>>>>>>>>>>>>>> RELEASED? <<<<<<<<<<<<<<<<
+  } else {
+    morse_events_cbuf[morse_events_write_i].type = 0 /*released*/;
+    signal_morse_in('X');	// 'X' means STOP task and signal OFF
+  }
+
+  morse_events_write_i++;
+  morse_events_write_i %= MORSE_EVENTS_MAX;		// it's a ring buffer
+
+ morse_isr_exit:
+  portEXIT_CRITICAL_ISR(&morse_MUX);
+} // touch_morse_ISR_v3()	s3 CONFIG_IDF_TARGET_ESP32S3
+
+#endif	// CONFIG_IDF_TARGET_ESP32S3  vs  CONFIG_IDF_TARGET_ESP32
+
+#endif // ESP32 && TOKEN_LENGTH_FEEDBACK_TASK	// experimental
+/* **************************************************************************************** */
+#endif // inbuilt vs MORSE_MODIFICATED_FEEDBACK version
+
+
+void trigger_token_duration_feedback() {
+  BaseType_t err = xTaskCreatePinnedToCore(morse_input_duration_feedback,	// function
+					   "morse_duration",			// name
+					   1024,				// stack size	or: 4*1024   TODO: test! <<<<<<<<<<<<<<<<
+					   NULL,				// task input parameter
+					   MORSE_DURATION_TASK_PRIORITY,	// task priority
+					   &morse_input_feedback_handle,	// task handle
+					   0);					// core 0
+  if(err != pdPASS) {
+    MENU.out(err);
+    MENU.space();
+    ERROR_ln(F("morse input feedback"));
+  }
+} // trigger_token_duration_feedback()
+
+
+bool check_and_treat_morse_events_v3() {	// polled from pulses.ino main loop()	*NEW VERSION 3*
+  static int last_seen_type=ILLEGAL32;
+
+  static unsigned long last_seen_touch_time=ILLEGAL32;
+  static unsigned long last_seen_release_time=ILLEGAL32;
+
+  float scaled_touch_duration = 0.0;
+  float scaled_released_duration = 0.0;
+
+  portENTER_CRITICAL(&morse_MUX);
+
+  if(morse_events_read_i == morse_events_write_i) {
+    bool retval=false;	// FIXME: unused?
+    if(morse_letter_separation_expected) {
+      extern bool morse_poll_letter_separation();
+      retval = morse_poll_letter_separation();
+    }
+    portEXIT_CRITICAL(&morse_MUX);
+    return retval;			// NO DATA, or no letter separation check needed
+  }
+
+  if(too_many_events) {			// ERROR buffer too small
+    too_many_events = false;
+    portEXIT_CRITICAL(&morse_MUX);
+
+    ERROR_ln(F("morse event buffer too small"));
+    return true;			// give up (for this round)
+
+  } else {	// (! too_many_events)		OK,  *NO ISR ERROR*
+     // check if already seen same type?
+    if(morse_events_cbuf[morse_events_read_i].type == last_seen_type) { // repeated: already seen SAME TYPE?
+      morse_events_read_i++;				// just ignore?
+      morse_events_read_i %= MORSE_EVENTS_MAX;
+
+      portEXIT_CRITICAL(&morse_MUX);
+      return true;
+
+    } else {		// NORMAL CASE:  >>>>>>>>>>>>>>>>  *NEW TYPE* was detected  <<<<<<<<<<<<<<<<
+
+      last_seen_type = morse_events_cbuf[morse_events_read_i].type;
+
+      morse_letter_separation_expected=0L;	// default, will be set if appropriate
+
+      if(last_seen_type /* == new TOUCH */) {	//    >>>>>>>>>>>>>>>> seen TOUCHED now <<<<<<<<<<<<<<<<
+	last_seen_touch_time = morse_events_cbuf[morse_events_read_i].time;
+	scaled_released_duration = (float) (last_seen_touch_time - last_seen_release_time) / morse_TimeUnit;
+	if(scaled_released_duration <= 0.0) {	// SAVETY NET, should not happen
+	  MENU.out_Error_();
+	  MENU.out(F("TODO:  negative scaled_released_duration "));
+	  MENU.outln(scaled_released_duration);
+	} // TODO: *does* this ever happen?
+
+	if (scaled_released_duration >= separeWordTim) {		// word end?
+	  morse_received_token(MORSE_TOKEN_separeLetter, scaled_released_duration);	// " |" is word end
+	  morse_received_token(MORSE_TOKEN_separeWord, scaled_released_duration);
+
+	} else if (scaled_released_duration >= separeLetterTim) {	// letter end?
+	  morse_received_token(MORSE_TOKEN_separeLetter, scaled_released_duration);
+
+	} else if (scaled_released_duration <= limit_debounce) {	// ignore debounce
+	  ;
+	} else  {							// token end
+	  morse_stats_gather(MORSE_TOKEN_separeToken, scaled_released_duration);
+	}
+
+      } else { /* new RELEASE */	//    >>>>>>>>>>>>>>>> seen RELEASED now <<<<<<<<<<<<<<<<
+	last_seen_release_time = morse_events_cbuf[morse_events_read_i].time;
+	scaled_touch_duration = (float) (last_seen_release_time - last_seen_touch_time) / morse_TimeUnit;
+	if(scaled_touch_duration <= 0.0) {		// SAVETY NET, should not happen
+	  MENU.out_Error_();
+	  MENU.out(F("TODO:  negative touch duration "));
+	  MENU.outln(scaled_touch_duration);
+	} // TODO: *does* this ever happen?
+
+	if (scaled_touch_duration > limit_debounce) {		// *REAL INPUT* no debounce
+	  if(scaled_touch_duration > limit_loong_overlong) {
+	    morse_received_token(MORSE_TOKEN_overlong, scaled_touch_duration);
+
+	  } else if (scaled_touch_duration > limit_dash_loong) {
+	    morse_received_token(MORSE_TOKEN_loong, scaled_touch_duration);
+
+	  } else if (scaled_touch_duration > limit_dot_dash) {
+	    morse_received_token(MORSE_TOKEN_dash, scaled_touch_duration);
+
+	  } else {
+	    morse_received_token(MORSE_TOKEN_dot, scaled_touch_duration);
+	  }
+	} // real input?
+	else {						// DEBOUNCE, ignore
+	  ;
+	} // debounce
+      } // touched | RELEASED ?
+
+      morse_events_read_i++;
+      morse_events_read_i %= MORSE_EVENTS_MAX;
+
+      if(morse_events_read_i == morse_events_write_i) {	// waiting untouched, if no input follows it would miss separeLetter
+	morse_letter_separation_expected = last_seen_release_time + (separeLetterTim * morse_TimeUnit)*3; // wait 3* as long...
+											// TODO: TEST&TRIMM: wait 3* as long...
+      } // set morse_letter_separation_expected ?
+    } // NEW or repeated type?
+  } // ! (too_many_events) ISR error?
+
+  portEXIT_CRITICAL(&morse_MUX);
+  return true;
+} // check_and_treat_morse_events_v3()
+
+void show_morse_event_buffer() {	// not used, DEBUGGING ONLY
   MENU.outln(F("\nmorse events circular buffer"));
   for(int i=0; i<MORSE_EVENTS_MAX; i++) {
     MENU.out(i);
@@ -319,462 +626,6 @@ void show_morse_event_buffer() {	// debugging only
   }
   MENU.ln();
 } // show_morse_event_buffer()
-#endif // DEBUG_TREAT_MORSE_EVENTS_V3
-
-#if defined MORSE_OUTPUT_PIN
-  #if defined TOKEN_LENGTH_FEEDBACK_PULSE
-int morse_length_feedback_pulse_i = ILLEGAL32;
-
-void deactivate_morse_feedback_d_pulse() {
-  if(morse_length_feedback_pulse_i != ILLEGAL32) {
-    PULSES.pulses[morse_length_feedback_pulse_i].flags &= ~ACTIVE;	 // sleep,
-    PULSES.pulses[morse_length_feedback_pulse_i].flags |= DO_NOT_DELETE; // but stay there
-    PULSES.pulses[morse_length_feedback_pulse_i].counter = 0;		 // do we need that?
-    // PULSES.fix_global_next();	// hmm?
-  } // else nothing to do
-}
-
-void morse_feedback_d(int pulse) {	// payload for morse duration feedback pulse
-  portENTER_CRITICAL(&morse_MUX);	// do we need that?
-  switch (PULSES.pulses[pulse].counter) {
-  case 1: // wait for loong
-    PULSES.pulses[pulse].period = (pulse_time_t) (limit_dash_loong * morse_TimeUnit);
-    digitalWrite(HARDWARE.morse_output_pin, HIGH);
-    break;
-  case 2: // loong reached: blink
-    digitalWrite(HARDWARE.morse_output_pin, LOW);
-    PULSES.pulses[pulse].period = PULSES.simple_time(100000);
-    break;
-  case 3: //  wait for overlong
-    digitalWrite(HARDWARE.morse_output_pin, HIGH);
-    PULSES.pulses[pulse].period = PULSES.simple_time(((limit_loong_overlong - limit_dash_loong) * morse_TimeUnit) - 100000);
-    break;
-  case 4: // overlong: switch LED off
-    digitalWrite(HARDWARE.morse_output_pin, LOW);
-  default:
-    deactivate_morse_feedback_d_pulse(); // sleep but stay ready for next press
-  }
-  portEXIT_CRITICAL(&morse_MUX);
-} // morse_feedback_d(pulse) payload
-
-void prepare_morse_feedback_d_pulse() {	// prepares, but does not start it
-  if((morse_length_feedback_pulse_i==ILLEGAL32) || (PULSES.pulses[morse_length_feedback_pulse_i].flags==0)) {
-    morse_length_feedback_pulse_i = PULSES.highest_available_pulse();
-    if(morse_length_feedback_pulse_i == ILLEGAL32)	// no pulse available
-      return;						//   just ignore
-    PULSES.init_pulse(morse_length_feedback_pulse_i);
-    PULSES.set_payload_with_pin(morse_length_feedback_pulse_i, morse_feedback_d, HARDWARE.morse_output_pin);  // pin not really used, hardcoded
-    PULSES.pulses[morse_length_feedback_pulse_i].groups = g_AUXILIARY;
-    PULSES.pulses[morse_length_feedback_pulse_i].flags |= DO_NOT_DELETE; // redundant
-    deactivate_morse_feedback_d_pulse();
-  }
-} // prepare_morse_feedback_d_pulse()
-
-void start_morse_feedback_d_pulse() {
-  // portENTER_CRITICAL(&morse_MUX);	// no: already done in caller:
-  // deactivate_morse_feedback_d_pulse();	// safety net...
-  if((morse_length_feedback_pulse_i==ILLEGAL32) || (PULSES.pulses[morse_length_feedback_pulse_i].flags==0)) {
-    prepare_morse_feedback_d_pulse();
-  }
-  if(morse_length_feedback_pulse_i != ILLEGAL32) {
-    PULSES.pulses[morse_length_feedback_pulse_i].next = PULSES.get_now();
-    PULSES.pulses[morse_length_feedback_pulse_i].flags |= ACTIVE;
-    PULSES.fix_global_next();
-  } // else (no free pulse): just ignore
-} // start_morse_feedback_d_pulse()
-  #else // no TOKEN_LENGTH_FEEDBACK_PULSE
-    #if defined ESP32 && defined TOKEN_LENGTH_FEEDBACK_TASK	// experimental
-
-#include <freertos/task.h>
-
-TaskHandle_t morse_input_feedback_handle;
-
-#if CONFIG_IDF_TARGET_ESP32	// version on classic ESP32 boards// #define MORSE_INPUT_DURATION_FEEDBACK_SHOW_STACK_USE	// DEBUGGING ONLY
-
-void morse_input_duration_feedback(void* dummy) {	// version: CONFIG_IDF_TARGET_ESP32
-  if(touchRead(HARDWARE.morse_touch_input_pin) < HARDWARE.touch_threshold) {	// looks STILL TOUCHED
-    vTaskDelay((TickType_t) (limit_dash_loong * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));
-    //vTaskDelay((TickType_t) (dashTim * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));
-    if(touchRead(HARDWARE.morse_touch_input_pin) < HARDWARE.touch_threshold) {	// looks STILL TOUCHED
-      digitalWrite(HARDWARE.morse_output_pin, LOW);
-      vTaskDelay((TickType_t) 100 / portTICK_PERIOD_MS);
-      if(touchRead(HARDWARE.morse_touch_input_pin) < HARDWARE.touch_threshold) {	// looks STILL TOUCHED
-	digitalWrite(HARDWARE.morse_output_pin, HIGH);
-      }
-    }
-  }
-  morse_input_feedback_handle = NULL;
- #if defined MORSE_INPUT_DURATION_FEEDBACK_SHOW_STACK_USE
-  MENU.out(F("morse_input_duration_feedback free STACK "));
-  MENU.outln(uxTaskGetStackHighWaterMark(NULL));
- #endif
-  vTaskDelete(NULL);
-} // morse_input_duration_feedback()	// version: CONFIG_IDF_TARGET_ESP32
-
-#else // other board, not classic ESP32
-
- #if CONFIG_IDF_TARGET_ESP32S3		// version on ESP32s3 boards// #define MORSE_INPUT_DURATION_FEEDBACK_SHOW_STACK_USE	// DEBUGGING ONLY
-
-#include <freertos/task.h>
-
-TaskHandle_t morse_input_feedback_handle;
-void morse_input_duration_feedback(void* dummy) {	// version: CONFIG_IDF_TARGET_ESP32S3
-  if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
-    vTaskDelay((TickType_t) (limit_dash_loong * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));
-    //vTaskDelay((TickType_t) (dashTim * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));
-    if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
-#if defined RUNNING_ON_ATS_MINI
-      show_morse_duration_feedback('!');
-#else
-      digitalWrite(HARDWARE.morse_output_pin, LOW);
-      vTaskDelay((TickType_t) 100 / portTICK_PERIOD_MS);
-#endif
-      if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
-#if defined RUNNING_ON_ATS_MINI
-	;
-#else
-	digitalWrite(HARDWARE.morse_output_pin, HIGH);
-#endif
-      }
-#if defined RUNNING_ON_ATS_MINI
-      else // not touched any more
-	show_morse_duration_feedback('0');
-#endif
-    }
-  }
-  morse_input_feedback_handle = NULL;
-#if defined MORSE_INPUT_DURATION_FEEDBACK_SHOW_STACK_USE
-  MENU.out(F("morse_input_duration_feedback free STACK "));
-  MENU.outln(uxTaskGetStackHighWaterMark(NULL));
-#endif
-  vTaskDelete(NULL);
-} // morse_input_duration_feedback()	// version: CONFIG_IDF_TARGET_ESP32S3
- #endif	// CONFIG_IDF_TARGET_ESP32S3
-#endif	// which board?
-
-void trigger_token_duration_feedback() {
-  BaseType_t err = xTaskCreatePinnedToCore(morse_input_duration_feedback,	// function
-					   "morse_duration",			// name
-					   1024,				// stack size	or: 4*1024   TODO: test! <<<<<<<<<<<<<<<<
-					   NULL,				// task input parameter
-					   MORSE_DURATION_TASK_PRIORITY,	// task priority
-					   &morse_input_feedback_handle,	// task handle
-					   0);					// core 0
-  if(err != pdPASS) {
-    MENU.out(err);
-    MENU.space();
-    ERROR_ln(F("morse input feedback"));
-  }
-}
-
-// works better when inlined
-// void IRAM_ATTR stop_token_duration_feedback() {	// (works better as inline)
-//   if(morse_input_feedback_handle != NULL) {
-//     vTaskDelete(morse_input_feedback_handle);
-//     morse_input_feedback_handle = NULL;
-//   }
-// }
-    #endif // TOKEN_LENGTH_FEEDBACK_TASK	// experimental
-  #endif // kind of token length feedback
-#endif // MORSE_OUTPUT_PIN
-
-
-#if CONFIG_IDF_TARGET_ESP32
-void IRAM_ATTR touch_morse_ISR_v3() {	// ISR for  CONFIG_IDF_TARGET_ESP32 touch sensor as morse input	*NEW VERSION 3*
-  unsigned long now = micros();
-
-  portENTER_CRITICAL_ISR(&morse_MUX);
-  unsigned long next_index = morse_events_write_i + 1;
-  next_index %= MORSE_EVENTS_MAX;
-
-  if(next_index == morse_events_read_i) {		// buffer full?
-    too_many_events = true;				//   ERROR too_many_events
-    goto morse_isr_exit;				//	   return
-  }
-
-  morse_events_cbuf[morse_events_write_i].time = now;	// save time
-
-  if(touchRead(HARDWARE.morse_touch_input_pin) < HARDWARE.touch_threshold) {	// >>>>>>>>>>>>>>>> looks TOUCHED <<<<<<<<<<<<<<<<
-    touch_pad_set_trigger_mode(TOUCH_TRIGGER_ABOVE);		// wait for touch release
-    morse_events_cbuf[morse_events_write_i].type = 1 /*touched*/;
-#if defined MORSE_OUTPUT_PIN
-    digitalWrite(HARDWARE.morse_output_pin, HIGH);		// feedback: pin is TOUCHED, LED on
-
- #if defined TOKEN_LENGTH_FEEDBACK_PULSE
-    start_morse_feedback_d_pulse();
- #elif defined TOKEN_LENGTH_FEEDBACK_TASK	// experimental
-    // stop_token_duration_feedback();			// assert it is off	// works better as inline:
-    if(morse_input_feedback_handle != NULL) {
-      vTaskDelete(morse_input_feedback_handle);
-      morse_input_feedback_handle = NULL;
-    }
-    trigger_token_duration_feedback();			// switch on
- #endif // TOKEN_LENGTH_FEEDBACK_TASK	// experimental
-#endif // MORSE_OUTPUT_PIN
-  } else {							// >>>>>>>>>>>>>>>> looks RELEASED <<<<<<<<<<<<<<<<
-    touch_pad_set_trigger_mode(TOUCH_TRIGGER_BELOW);		// wait for next touch
-    morse_events_cbuf[morse_events_write_i].type = 0 /*released*/;
-#if defined MORSE_OUTPUT_PIN
-    digitalWrite(HARDWARE.morse_output_pin, LOW);		// feedback: pin is RELEASED, LED off
-
-  #if defined TOKEN_LENGTH_FEEDBACK_PULSE
-    deactivate_morse_feedback_d_pulse();
-  #elif defined TOKEN_LENGTH_FEEDBACK_TASK		// experimental rtos task
-    // stop_token_duration_feedback();			// works better as inline:
-    if(morse_input_feedback_handle != NULL)
-      vTaskDelete(morse_input_feedback_handle);
-    morse_input_feedback_handle = NULL;
-  #endif // TOKEN_LENGTH_FEEDBACK_TASK			// experimental rtos task
-#endif // MORSE_OUTPUT_PIN
-  }
-  morse_events_write_i++;
-  morse_events_write_i %= MORSE_EVENTS_MAX;		// it's a ring buffer
-
- morse_isr_exit:
-  portEXIT_CRITICAL_ISR(&morse_MUX);
-} // touch_morse_ISR_v3()	 CONFIG_IDF_TARGET_ESP32
-#elif CONFIG_IDF_TARGET_ESP32S3		// version on ESP32s3 boards
-
-void IRAM_ATTR touch_morse_ISR_v3() {	// ISR for CONFIG_IDF_TARGET_ESP32S3 touch sensor as morse input	*NEW VERSION 3*	  ESP32s3 variant
-  unsigned long now = micros();
-
-  portENTER_CRITICAL_ISR(&morse_MUX);
-  unsigned long next_index = morse_events_write_i + 1;
-  next_index %= MORSE_EVENTS_MAX;
-
-  if(next_index == morse_events_read_i) {		// buffer full?
-    too_many_events = true;				//   ERROR too_many_events
-    goto morse_isr_exit;				//	   return
-  }
-
-  morse_events_cbuf[morse_events_write_i].time = now;	// save time
-
-  if (touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// >>>>>>>>>>>>>>>> TOUCHED <<<<<<<<<<<<<<<<
-    morse_events_cbuf[morse_events_write_i].type = 1 /*touched*/;
-#if defined MORSE_OUTPUT_PIN
-    digitalWrite(HARDWARE.morse_output_pin, HIGH);		// feedback: pin is TOUCHED, LED on
-
- #if defined TOKEN_LENGTH_FEEDBACK_PULSE
-    start_morse_feedback_d_pulse();
- #elif defined TOKEN_LENGTH_FEEDBACK_TASK	// experimental
-    // stop_token_duration_feedback();			// assert it is off	// works better as inline:
-    if(morse_input_feedback_handle != NULL) {
-      vTaskDelete(morse_input_feedback_handle);
-      morse_input_feedback_handle = NULL;
-    }
-    trigger_token_duration_feedback();			// switch on
- #endif // TOKEN_LENGTH_FEEDBACK_TASK	// experimental
-
-#else // no  MORSE_OUTPUT_PIN
-  #if defined RUNNING_ON_ATS_MINI
-    show_morse_duration_feedback('.');
-    #if defined TOKEN_LENGTH_FEEDBACK_TASK	// experimental
-       // stop_token_duration_feedback();			// assert it is off	// works better as inline:
-       if(morse_input_feedback_handle != NULL) {
-         vTaskDelete(morse_input_feedback_handle);
-         morse_input_feedback_handle = NULL;
-       }
-       trigger_token_duration_feedback();			// switch on
-    #endif // TOKEN_LENGTH_FEEDBACK_TASK	// experimental
-  #endif
-#endif // MORSE_OUTPUT_PIN  or  RUNNING_ON_ATS_MINI
-
-
-  } else {							// >>>>>>>>>>>>>>>> RELEASED <<<<<<<<<<<<<<<<
-    morse_events_cbuf[morse_events_write_i].type = 0 /*released*/;
-
-#if defined MORSE_OUTPUT_PIN
-    digitalWrite(HARDWARE.morse_output_pin, LOW);		// feedback: pin is RELEASED, LED off
-
-  #if defined TOKEN_LENGTH_FEEDBACK_PULSE
-    deactivate_morse_feedback_d_pulse();
-  #elif defined TOKEN_LENGTH_FEEDBACK_TASK		// experimental rtos task
-    // stop_token_duration_feedback();			// works better as inline:
-    if(morse_input_feedback_handle != NULL)
-      vTaskDelete(morse_input_feedback_handle);
-    morse_input_feedback_handle = NULL;
-  #endif // TOKEN_LENGTH_FEEDBACK_TASK			// experimental rtos task
-
-#else // no  MORSE_OUTPUT_PIN
-  #if defined RUNNING_ON_ATS_MINI
-    show_morse_duration_feedback('0');
-    #if defined TOKEN_LENGTH_FEEDBACK_TASK	// experimental
-      // stop_token_duration_feedback();			// works better as inline:
-      if(morse_input_feedback_handle != NULL)
-        vTaskDelete(morse_input_feedback_handle);
-      morse_input_feedback_handle = NULL;
-    #endif
-  #endif
-#endif // MORSE_OUTPUT_PIN  RUNNING_ON_ATS_MINI
-  }
-  morse_events_write_i++;
-  morse_events_write_i %= MORSE_EVENTS_MAX;		// it's a ring buffer
-
- morse_isr_exit:
-  portEXIT_CRITICAL_ISR(&morse_MUX);
-} // touch_morse_ISR_v3()	CONFIG_IDF_TARGET_ESP32S3
-
-#endif // ESP32 vs ESP32s3
-
-//#define DEBUG_TREAT_MORSE_EVENTS_V3
-//#define SHOW_REPEATED_TOUCH_OR_RELEASE	// TODO: FIXME: why does it happen so often?
-bool check_and_treat_morse_events_v3() {	// polled from pulses.ino main loop()	*NEW VERSION 3*
-  static int last_seen_type=ILLEGAL32;
-
-  static unsigned long last_seen_touch_time=ILLEGAL32;
-  static unsigned long last_seen_release_time=ILLEGAL32;
-
-  float scaled_touch_duration = 0.0;
-  float scaled_released_duration = 0.0;
-
-  portENTER_CRITICAL(&morse_MUX);
-
-  if(morse_events_read_i == morse_events_write_i) {
-    bool retval=false;	// FIXME: unused?
-    if(morse_letter_separation_expected) {
-      extern bool morse_poll_letter_separation();
-      retval = morse_poll_letter_separation();
-    }
-    portEXIT_CRITICAL(&morse_MUX);
-    return retval;			// NO DATA, or no letter separation check needed
-  }
-
-  if(too_many_events) {			// ERROR buffer too small
-    too_many_events = false;
-    portEXIT_CRITICAL(&morse_MUX);
-
-    ERROR_ln(F("morse event buffer too small"));
-    return true;			// give up (for this round)
-
-  } else {	// (! too_many_events)		OK,  *NO ISR ERROR*
-     // check if already seen same type?
-    if(morse_events_cbuf[morse_events_read_i].type == last_seen_type) { // already seen SAME TYPE?
-
-#if defined SHOW_REPEATED_TOUCH_OR_RELEASE || defined DEBUG_TREAT_MORSE_EVENTS_V3
-      MENU.out_Error_();					// strange ERROR, SAVETY NET, ignore
-      MENU.out(F("skip repeated "));				// strange ERROR, SAVETY NET, ignore
-      if(morse_events_cbuf[morse_events_read_i].type)
-	MENU.outln(F("TOUCH"));
-      else
-	MENU.outln(F("RELEASE"));
-#endif
-
-      morse_events_read_i++;				// just ignore?
-      morse_events_read_i %= MORSE_EVENTS_MAX;
-
-      portEXIT_CRITICAL(&morse_MUX);
-      return true;
-
-    } else {		// NORMAL CASE:  >>>>>>>>>>>>>>>>  *NEW TYPE* was detected  <<<<<<<<<<<<<<<<
-
-      last_seen_type = morse_events_cbuf[morse_events_read_i].type;
-
-      morse_letter_separation_expected=0L;	// default, will be set if appropriate
-
-      if(last_seen_type /* == new TOUCH */) {	//    >>>>>>>>>>>>>>>> seen TOUCHED now <<<<<<<<<<<<<<<<
-#if defined DEBUG_TREAT_MORSE_EVENTS_V3
-	MENU.out(F("TOUCH\t"));
-#endif
-	last_seen_touch_time = morse_events_cbuf[morse_events_read_i].time;
-	scaled_released_duration = (float) (last_seen_touch_time - last_seen_release_time) / morse_TimeUnit;
-	if(scaled_released_duration <= 0.0) {	// SAVETY NET, should not happen
-	  MENU.out_Error_();
-	  MENU.out(F("TODO:  negative scaled_released_duration "));
-	  MENU.outln(scaled_released_duration);
-	} // TODO: *does* this ever happen?
-
-	if (scaled_released_duration >= separeWordTim) {		// word end?
-#if defined DEBUG_TREAT_MORSE_EVENTS_V3
-	MENU.outln(F("word end"));
-#endif
-	  morse_received_token(MORSE_TOKEN_separeLetter, scaled_released_duration);	// " |" is word end
-	  morse_received_token(MORSE_TOKEN_separeWord, scaled_released_duration);
-
-	} else if (scaled_released_duration >= separeLetterTim) {	// letter end?
-#if defined DEBUG_TREAT_MORSE_EVENTS_V3
-	MENU.outln(F("letter end by touch"));
-#endif
-	  morse_received_token(MORSE_TOKEN_separeLetter, scaled_released_duration);
-
-	} else if (scaled_released_duration <= limit_debounce) {	// ignore debounce
-#if defined DEBUG_TREAT_MORSE_EVENTS_V3
-	  MENU.outln(F("DEBOUNCE ignored"));
-#endif
-	  ;
-	} else  {							// token end
-#if defined DEBUG_TREAT_MORSE_EVENTS_V3
-	  MENU.outln(F("token end"));
-#endif
-	  morse_stats_gather(MORSE_TOKEN_separeToken, scaled_released_duration);
-	}
-
-      } else { /* new RELEASE */	//    >>>>>>>>>>>>>>>> seen RELEASED now <<<<<<<<<<<<<<<<
-#if defined DEBUG_TREAT_MORSE_EVENTS_V3
-	MENU.out(F("RELEASE\t"));
-#endif
-	last_seen_release_time = morse_events_cbuf[morse_events_read_i].time;
-	scaled_touch_duration = (float) (last_seen_release_time - last_seen_touch_time) / morse_TimeUnit;
-#if defined DEBUG_TREAT_MORSE_EVENTS_V3
-	MENU.out(F("scaled_touch_duration\t"));
-	MENU.outln(scaled_touch_duration);
-#endif
-	if(scaled_touch_duration <= 0.0) {		// SAVETY NET, should not happen
-	  MENU.out_Error_();
-	  MENU.out(F("TODO:  negative touch duration "));
-	  MENU.outln(scaled_touch_duration);
-	} // TODO: *does* this ever happen?
-
-	if (scaled_touch_duration > limit_debounce) {		// *REAL INPUT* no debounce
-	  if(scaled_touch_duration > limit_loong_overlong) {
-#if defined DEBUG_TREAT_MORSE_EVENTS_V3
-	    MENU.outln(F("overlong"));
-#endif
-	    morse_received_token(MORSE_TOKEN_overlong, scaled_touch_duration);
-
-	  } else if (scaled_touch_duration > limit_dash_loong) {
-#if defined DEBUG_TREAT_MORSE_EVENTS_V3
-	    MENU.outln(F("loong"));
-#endif
-	    morse_received_token(MORSE_TOKEN_loong, scaled_touch_duration);
-
-	  } else if (scaled_touch_duration > limit_dot_dash) {
-#if defined DEBUG_TREAT_MORSE_EVENTS_V3
-	    MENU.outln('-');
-#endif
-	    morse_received_token(MORSE_TOKEN_dash, scaled_touch_duration);
-
-	  } else {
-#if defined DEBUG_TREAT_MORSE_EVENTS_V3
-	    MENU.outln('.');
-#endif
-	    morse_received_token(MORSE_TOKEN_dot, scaled_touch_duration);
-	  }
-	} // real input?
-	else {						// DEBOUNCE, ignore
-#if defined DEBUG_TREAT_MORSE_EVENTS_V3
-	  MENU.outln(F("DEBOUNCE ignored"));
-#endif
-	  ;
-	} // debounce
-      } // touched | RELEASED ?
-
-      morse_events_read_i++;
-      morse_events_read_i %= MORSE_EVENTS_MAX;
-
-      if(morse_events_read_i == morse_events_write_i) {	// waiting untouched, if no input follows it would miss separeLetter
-	morse_letter_separation_expected = last_seen_release_time + (separeLetterTim * morse_TimeUnit)*3; // wait 3* as long...
-											// TODO: TEST&TRIMM: wait 3* as long...
-#if defined DEBUG_TREAT_MORSE_EVENTS_V3
-	MENU.outln(F("waiting for letter separation"));
-#endif
-      } // set morse_letter_separation_expected ?
-    } // NEW or repeated type?
-  } // ! (too_many_events) ISR error?
-
-  portEXIT_CRITICAL(&morse_MUX);
-  return true;
-} // check_and_treat_morse_events_v3()
-
 
 bool morse_poll_letter_separation() {
   if(morse_letter_separation_expected == 0L)		// we *might* miss one at a 0, i don't mind ;)
@@ -789,14 +640,10 @@ bool morse_poll_letter_separation() {
     // morse_MUX is respected by caller
     morse_received_token(MORSE_TOKEN_separeLetter, separeLetterTim /*that's a fake!*/);
     morse_letter_separation_expected = 0L;
-#if defined DEBUG_TREAT_MORSE_EVENTS_V3
-    MENU.outln(F("\nautomatic letter separation"));
-#endif
     return true;
   }
 } // morse_poll_letter_separation()  TOUCH_ISR_VERSION_3
-//  #elif defined TOUCH_ISR_VERSION_2	// REMOVED, see: morse_unused.txt
-#endif // TOUCH_ISR_VERSION
+#endif // TOUCH_ISR_VERSION_3
 
 #endif // MORSE_TOUCH_INPUT_PIN
 /* **************************************************************** */
@@ -941,26 +788,13 @@ void morse_show_saved_stats() {
   MENU.outln(morse_TimeUnit);
 } // morse_show_saved_stats()
 
-//#define DEBUG_MORSE_STATS_DO	// ATTENTION can be called from interrupt...
 void static IRAM_ATTR morse_stats_do() {
-#if defined DEBUG_MORSE_STATS_DO
-  MENU.ln();
-#endif
-
   if(morse_stats_dot_cnt) {
     morse_stats_dot_duration_ /= morse_stats_dot_cnt;
-#if defined DEBUG_MORSE_STATS_DO
-  MENU.out(F("dot\t\t% "));
-  MENU.outln(morse_stats_dot_duration_ / dotTim);
-#endif
   }
 
   if(morse_stats_dash_cnt) {
     morse_stats_dash_duration_ /= morse_stats_dash_cnt;
-#if defined DEBUG_MORSE_STATS_DO
-    MENU.out(F("dash\t\t% "));
-    MENU.outln(morse_stats_dash_duration_ / dashTim);
-#endif
 
     // auto adapt, 1st simple try: only look at dashs
     morse_stats_mean_dash_factor = morse_stats_dash_duration_ / dashTim; // save for auto speed adaption
@@ -968,35 +802,15 @@ void static IRAM_ATTR morse_stats_do() {
 
   if(morse_stats_loong_cnt) {
     morse_stats_loong_duration_ /= morse_stats_loong_cnt;
-#if defined DEBUG_MORSE_STATS_DO
-    MENU.out(F("loong\t\t% "));
-    MENU.outln(morse_stats_loong_duration_ / loongTim);
-#endif
   }
 
   if(morse_stats_separeToken_cnt) {
     morse_stats_separeToken_duration_ /= morse_stats_separeToken_cnt;
-#if defined DEBUG_MORSE_STATS_DO
-    MENU.out(F("separeToken\t% "));
-    MENU.outln(morse_stats_dash_duration_ / separeTokenTim);
-#endif
   }
 
   if(morse_stats_separeLetter_cnt) {
     morse_stats_separeLetter_duration_ /= morse_stats_separeLetter_cnt;
-#if defined DEBUG_MORSE_STATS_DO
-    MENU.out(F("separeLetter\t% "));
-    MENU.outln(morse_stats_dash_duration_ / separeLetterTim);
-#endif
   }
-
-#if defined DEBUG_MORSE_STATS_DO
-//  if(morse_stats_separeWord_cnt) {
-//    morse_stats_separeWord_duration_ /= morse_stats_separeWord_cnt;
-//    MENU.out(F("separeWord\t% "));
-//    MENU.outln(morse_stats_dash_duration_ / separeWordTim);
-//  }
-#endif
 
   morse_stats_save();		// called from morse_stats_do()
 } // morse_stats_do()
@@ -1006,37 +820,22 @@ void static morse_token_decode();	// pre declaration
 
 void morse_received_token(char token, float duration) {
   // portENTER_CRITICAL(&morse_MUX);	// respected by caller
-#if defined MORSE_DEBUG_RECEIVE_TOKEN
-  //MENU.out("morse_received_token() "); MENU.outln(token);
-#endif
 
   if(morse_token_cnt < MORSE_TOKEN_MAX) {	// buffer not full?
     extern short morse_out_buffer_cnt;
     if(morse_out_buffer_cnt==0 && token==MORSE_TOKEN_overlong) {	// 'V' overlong cannot be starting token
-      MENU.outln(F("skip 'V'"));					//     but sometimes it *is* (i.e. when starting morse input)
+      // MENU.outln(F("skip 'V'"));					//     but sometimes it *is* (i.e. when starting morse input), silently ignore
       return;
     }
     morse_token_duration[morse_token_cnt] = duration;	// SAVE TOKEN and duration
     morse_SEEN_TOKENS[morse_token_cnt++] = token;
 
     if(is_real_token(token)) {	// react on REAL morse tokens
-#if defined MORSE_DEBUG_RECEIVE_TOKEN
-      //MENU.out("morse real token "); MENU.outln(token);
-#endif
       switch (token) {		// save letters?, do statistics?
       case MORSE_TOKEN_separeLetter:
-#if defined MORSE_DEBUG_RECEIVE_TOKEN
-      MENU.outln("MORSE_TOKEN_separeLetter");
-#endif
 	if(morse_token_cnt == 1) {	// ignore separation tokens on startup
-#if defined MORSE_DEBUG_RECEIVE_TOKEN
-      MENU.outln("skip 1st");
-#endif
 	  --morse_token_cnt;		//   remove 1st from buffer
 	} else {			// MORSE_TOKEN_separeLetter  ok
-#if defined MORSE_DEBUG_RECEIVE_TOKEN
-      MENU.outln("statistics");
-#endif
 	  morse_stats_do();	// do statistics on received letter
 	  morse_stats_init();	// prepare stats for next run
 
@@ -1045,13 +844,7 @@ void morse_received_token(char token, float duration) {
 	break;
 
       case MORSE_TOKEN_separeWord:
-#if defined MORSE_DEBUG_RECEIVE_TOKEN
-      MENU.outln("MORSE_TOKEN_separeWord");
-#endif
 	if(morse_token_cnt == 1) {	// ignore separation tokens on startup
-#if defined MORSE_DEBUG_RECEIVE_TOKEN
-      MENU.outln("skip 1st");
-#endif
 	  --morse_token_cnt;		//   remove from buffer
 	} else {
 	  //	morse_save_symbol(token);
@@ -1062,12 +855,7 @@ void morse_received_token(char token, float duration) {
 	morse_stats_gather(token, duration);
       }
     }
-#if defined MORSE_DEBUG_RECEIVE_TOKEN
-    else {
-      MENU.out("morse unreal token ");
-      MENU.outln(token);
-    }
-#endif
+    // else unreal token
   } else {
     ERROR_ln(F("MORSE_TOKEN_MAX	buffer cleared"));
     morse_token_cnt=0;	// TODO: maybe still use data or use a ring buffer?
@@ -1075,205 +863,7 @@ void morse_received_token(char token, float duration) {
 } // morse_received_token()
 
 
-//%/* **************************************************************** */
-//%// morse output, i.e. on a piezzo, led
-//%
-//%// declarations to be defined later
-//%void morse_out_dot();
-//%void morse_out_dash();
-//%void morse_out_loong();
-//%void morse_out_overlong();
-//%void morse_out_separeLetter();
-//%void morse_out_separeWord();
-//%
-//%#if defined MORSE_OUTPUT_PIN
-//%void morse_play_out_tokens(bool show=true) {	// play (and show) saved tokens in current morse speed
-//%  char token;
-//%  for(int i=0 ; i < morse_token_cnt; i++) {
-//%    token = morse_SEEN_TOKENS[i];
-//%    switch (token) {
-//%    case MORSE_TOKEN_dot:
-//%      if(show)
-//%	MENU.out(token);	// show *before* sound
-//%      morse_out_dot();
-//%      break;
-//%    case MORSE_TOKEN_dash:
-//%      if(show)
-//%	MENU.out(token);	// show *before* sound
-//%      morse_out_dash();
-//%      break;
-//%    case MORSE_TOKEN_loong:
-//%      if(show)
-//%	MENU.out(token);	// show *before* sound
-//%      morse_out_loong();
-//%      break;
-//%    case MORSE_TOKEN_overlong:
-//%      if(show)
-//%	MENU.out(token);	// show *before* sound
-//%      morse_out_overlong();
-//%      break;
-//%    case MORSE_TOKEN_separeLetter:
-//%      if(show)
-//%	MENU.out(token);	// show *before* sound
-//%      morse_out_separeLetter();
-//%      break;
-//%    case MORSE_TOKEN_separeWord:
-//%      if(show)
-//%	MENU.out(token);	// show *before* sound
-//%      morse_out_separeWord();
-//%      break;
-//%    }
-//%  }
-//%  if(show)
-//%    MENU.ln();
-//%}
-//%#endif // MORSE_OUTPUT_PIN
-
-/* **************************************************************** */
-// 2nd implementation: human readable look up table
-
-// morse code see i.e.
-// https://www.electronics-notes.com/articles/ham_radio/morse_code/characters-table-chart.php
-
-
-// the table *is sorted* for quick lookup
-
-// common fixed place entries:
-// *		number of tokens 1-9 A-F
-//  *		delimiter ' '
-//   *		type: '*' is LETTER
-//                    'C' is COMMAND
-//                    '0' undefined
-//    *		delimiter ' '
-//     *	first token
-//      *	next token until space as delimiter)
-
-// LETTERS:	if type=='*' it continues like this:
-//       *	first UPPERCASE letter or compound string, *can* be ' '
-//        ****	' ' delimiter or more chars from UPPERCASE COMPOUND string
-//            *	first LOWERCASE letter or compound string, *can* be ' '
-//             ****	' ' delimiter or more chars from LOWERCASE COMPOUND string
-
-//                 *	delimiter or string end
-//                  *<NAME>" comment or extensions
-
-// COMMAND:
-// *		number of tokens 1-9 A-F
-//  *		delimiter
-//  'C'		type: 'C' is COMMAND
-//     *...	tokens
-//	   *	delimiter
-//          *<COMMAND>"
-//		      "	STRING END,
-//                    " delimiter ' ' is *not* enough here
-
-const char * morse_definitions_tab[] = {
-  "1 * . E e",
-  "1 * - T t",
-
-  "1 C ! NEXT",		// SEND if morse input,  else  START/STOP playing
-  "1 C V CANCEL",
-
-  "2 * .. I i",
-  "2 * .- A a",
-  "2 * -. N n",
-  "2 * -- M m",
-
-  "2 C !. LOWER",
-  "2 C !- UPPER",
-  "2 C !! DELLAST",
-
-  "3 * ... S s",
-  "3 * ..- U u",
-  "3 * .-. R r",
-  "3 * .-- W w",
-  "3 * -.. D d",
-  "3 * -.- K k",
-  "3 * --. G g",
-  "3 * --- O o",
-
-  "4 * .... H h",
-  "4 * ...- V v",
-  "4 * ..-. F f",
-  "4 * ..-- Ü ü",
-  "4 * .-.. L l",
-  "4 * .-.- Ä ä",
-  "4 * .--. P p",
-  "4 * .--- J j",
-  "4 * -... B b",
-  "4 * -..- X x",
-  "4 * -.-. C c",
-  "4 * -.-- Y y",
-  "4 * --.. Z z",
-  "4 * --.- Q q",
-  "4 * ---. Ö ö",
-  "4 C ---- ANY1",	// was: |CH| |ch|
-
-  "5 * ..... 5 5",
-  "5 * ....- 4 4",
-  "5 C ...-. MACRO_NOW",	// SN
-  "5 * ...-- 3 3",
-//"5 * ..-.. É É",	// was: É	FIX: lowercase
-  "5 C ..-.. UIswM",	// switch Motion UI activity
-//"5 0 ..-.- 5 5",	// ..K  IK  UA  FT EÄ
-  "5 * ..--. - -",	// ???
-  "5 * ..--- 2 2",
-  "5 * .-... & &",
-  "5 * .-..- È È",	// È	FIX: lowercase
-  "5 * .-.-. + +",
-//"5 0 .-.-- 5 5",
-//"5 0 .--.. 5 5",
-  "5 * .--.- Å Å",	// Å	FIX: lowercase
-  "5 * .---. - -",	// ???
-  "5 * .---- 1 1",
-  "5 * -.... 6 6",
-  "5 * -...- = =",
-  "5 * -..-. / /",
-  "5 C -..-- UPPER",	// NW	_..__	UPPERCASE
-  "5 C -.-.. LOWER",	// ND	-.-..	LOWERCASE
-//"5 C -.-.- SEND",	// NK	-.-.-	SEND	obsolete, replaced by 'NEXT'
-  "5 * -.--. ( (",
-  "5 C -.--- DELLAST",	// NO -.---	DELETE LAST LETTER
-  "5 * --... 7 7",
-//"5 0 --..- 5 5",	// FREE M	MU	__.._ 3 M- COMMAND triggers	free :)  rhythm sample? tap  *HOW TO GET OUT?*
-//"5 0 --.-. 5 5",	// FREE M	MR	--.-. 3 M- COMMAND triggers	free :)  rhythm replay
-//"5 * --.-- Ñ Ñ",	// Ñ
-  "5 * --.-- * *",	// my private code for '*'	// was: Ñ
-  "5 0 ---.- OLED",	// OA	---.-	OLED	toggle oled display
-  "5 * ---.. 8 8",
-  "5 * ----. 9 9",
-  "5 C ---.- DELWORD",	// MK	---.-	DELETE WORD
-  "5 * ----- 0 0",
-
-
-//"6 0 ...... TODO",	// FREE
-//"6 0 ....._ TODO",	// FREE
-//"6 0 ...._. TODO",	// FREE
-//"6 0 ....__ TODO",	// FREE
-//"6 0 ...-.. TODO",	// FREE		(maybe morse speed calibration?)
-//"6 0 ...-.- TODO",	// FREE		(maybe morse speed calibration?)
-//"6 0 ...__. TODO",	// FREE
-//"6 C ...--- (was: OLED)",	// FREE	  was: OLED toggle oled display while playing
-//"6 0 ...... TODO",	// FREE
-//"6 0 ...... TODO",	// FREE
-
-  "6 * ..--.. ? ?",
-  "6 * .-..-. \" \"",
-  "6 * .----. ' '",
-  "6 * .-.-.- . .",
-  "6 * .--.-. @ @",
-  "6 * -....- _ _",	// check - _
-  "6 * -.-.-. ; ;",
-  "6 * -.-.-- ! !",
-  "6 * --..-- , ,",
-  "6 * ---... : :",
-
-  "7 * ...-..- $ $",
-//"7 0 ...--.. X X TODO:",		// beta ss	TODO: FIX:
-
-  "8 C ........ MISTAKE",		// MISTAKE
-};
-#define MORSE_DEFINITIONS	(sizeof (morse_definitions_tab) / sizeof(const char *))
+#include "morse_definitions.h"
 
 
 uint8_t morse_def_token_cnt=0;
@@ -1448,7 +1038,7 @@ int morse_find_definition(const char* pattern) {  // returns index in morse_defi
   for(int i=0; i<MORSE_DEFINITIONS ; i++) {
     morse_read_definition(i);
     if((string) pattern == morse_DEFINITION_TOKENS) {
-#if defined MORSE_DECODE_DEBUG
+#if defined MORSE_DECODE_DEBUG	// left that in here
       MENU.out("== ");
       MENU.outln(pattern);
       morse_show_definition();
@@ -1503,9 +1093,6 @@ void morse_clear_display__prepare_action() {	// can set trigger  morse_trigger_K
   morse_output_buffer[morse_out_buffer_cnt]='\0';	// append '\0'
   if(morse_out_buffer_cnt) {
 #if defined HAS_ePaper
-  #if defined MORSE_ePaper_DEBUG	// TODO: REMOVE
-    DADA("ePaper clear and prepare ");
-  #endif
     if(ePaper_printing_available()) {
       xSemaphoreTake(ePaper_generic_MUX, portMAX_DELAY);
       ePaper_generic_print_job=1376;
@@ -1514,14 +1101,10 @@ void morse_clear_display__prepare_action() {	// can set trigger  morse_trigger_K
       ePaper.display(true);									 // HAS_ePaper
       xSemaphoreGive(ePaper_generic_MUX);
     }
-  #if defined MORSE_ePaper_DEBUG	// TODO: REMOVE
-    else
-      DADA("was in use, no clearing");
-  #endif
 
 #elif defined HAS_OLED
     MC_printlnBIG(MORSE_MONOCHROME_ROW, "        ");
-#endif
+#endif // HAS_ePaper vs HAS_OLED
 
     morse_out_buffer_cnt = 0;
     morse_trigger_KB_macro = true;	// *triggers* morse_PLAY_input_KB_macro()
@@ -1556,22 +1139,15 @@ void monochrome_out_morse_char() {
     char s[]="  ";
     s[0] = morse_output_char;
  #if defined HAS_ePaper
-  #if defined MORSE_ePaper_DEBUG	// TODO: REMOVE
-    DADA("ePaper show morse char");
-  #endif
     if(ePaper_printing_available()) {
       MC_printBIG_at((morse_out_buffer_cnt - 1), MORSE_MONOCHROME_ROW, s, /*offset_y= */ -6);	// HAS_ePaper
       morse_output_char = '\0';	// trigger off
-  #if defined MORSE_ePaper_DEBUG	// TODO: REMOVE
-      DADA("OK");
-  #endif
     } else {
-      DADA("delayed");
       return;	// do that later
     }
 #else	// HAS_OLED
     MC_printBIG_at(2*(morse_out_buffer_cnt - 1), MORSE_MONOCHROME_ROW, s, /*offset_y= */ -6);	// HAS_OLED
- #endif
+#endif	// HAS_ePaper vs HAS_OLED
   }
 
   morse_output_char = '\0';	// trigger off
@@ -1580,7 +1156,7 @@ void monochrome_out_morse_char() {
 
 
 bool echo_morse_input=true;
-bool morse_store_received_letter(char letter) {		// returns error
+bool morse_store_and_show_received_letter(char letter) {	// returns error
   if(echo_morse_input)
     MENU.out(letter);
 #if defined HAS_DISPLAY
@@ -1605,15 +1181,9 @@ void static morse_token_decode() {	// decode received token sequence
 
   EXECUTE COMMANDS,
   return of commands is currently unused, always 0
-
-  see: MORSE_DECODE_DEBUG
 */
   char pattern[10] = { '\0' };	// 10 (up to 9 real tokens + '\0'
   char token;
-
-#if defined MORSE_DECODE_DEBUG
-  MENU.outln("morse_token_decode()");
-#endif
 
   pattern[0] = '\0';
   short pattern_length=0;
@@ -1630,20 +1200,13 @@ void static morse_token_decode() {	// decode received token sequence
 	case MORSE_TOKEN_dot:
 	case MORSE_TOKEN_dash:
 	  pattern[pattern_length++] = token;
-#if defined MORSE_DECODE_DEBUG
-	  MENU.space(2);
-	  MENU.out(token);
-#endif
 	  break;
 
 	case MORSE_TOKEN_separeLetter:		// time to store letter
-#if defined MORSE_DECODE_DEBUG
-	  MENU.out(F("\tsepareLetter "));
-#endif
 	  if(morse_find_definition(pattern) != ILLEGAL32) {
 	    switch(morse_PRESENT_TYPE) {
 	    case '*':	// letter
-	      morse_store_received_letter(morse_PRESENT_in_case_Letter);
+	      morse_store_and_show_received_letter(morse_PRESENT_in_case_Letter);
 	      break;
 
 	    case 'C':	// Command
@@ -1654,14 +1217,23 @@ void static morse_token_decode() {	// decode received token sequence
 #else
 		  morse_clear_display__prepare_action();	// *NO* output version
 #endif
-		} else {				// else: 'P'=START/STOP		TODO: for preset mode, TEST: for others
-		  morse_store_received_letter(morse_PRESENT_in_case_Letter = 'P');
+		}	// NEXT (*with* stored inputs)
+		else {	// bare NEXT
+
+#if defined PULSES_SYSTEM	// bare NEXT in PULSES_SYSTEM 'P'=START/STOP		TODO: for preset mode, TEST: for others
+		  morse_store_and_show_received_letter(morse_PRESENT_in_case_Letter = 'P');
+#else	// bare NEXT outside PULSES_SYSTEM
+		  // just ignoring it gives strange problems...  so:
+		  morse_store_and_show_received_letter(morse_PRESENT_in_case_Letter = '?');	// '?' shows menu
+#endif	// PULSES_SYSTEM or not
+
 #if defined MULTICORE_DISPLAY
 		  do_on_other_core(&morse_clear_display__prepare_action);	// will set trigger  morse_trigger_KB_macro=true
-#else // *NO* output version
+  #else // *NO* output version
 		  morse_clear_display__prepare_action();
-#endif // MULTICORE_DISPLAY  vs *NO* output
+  #endif // MULTICORE_DISPLAY  vs *NO* output
 		}
+
 	      } else if(morse_PRESENT_COMMAND == "LOWER")
 		morse_uppercase = false;
 
@@ -1672,9 +1244,6 @@ void static morse_token_decode() {	// decode received token sequence
 		if(morse_out_buffer_cnt) {
 		  morse_out_buffer_cnt--;
 #if defined HAS_ePaper
-  #if defined MORSE_ePaper_DEBUG	// TODO: REMOVE
-		  DADA("ePaper DELLAST");
-  #endif
 		  MC_printBIG_at(morse_out_buffer_cnt, MORSE_MONOCHROME_ROW, " ");	// DELLAST	// HAS_ePaper
 #elif defined HAS_OLED
 		  MC_printBIG_at(2*morse_out_buffer_cnt, MORSE_MONOCHROME_ROW, " ");	// DELLAST	// HAS_OLED
@@ -1702,9 +1271,6 @@ void static morse_token_decode() {	// decode received token sequence
 		morse_token_cnt = 0;
 		morse_out_buffer_cnt = 0;
 #if defined HAS_DISPLAY
-  #if defined MORSE_ePaper_DEBUG	// TODO: REMOVE
-		DADA("ePaper CANCEL");
-  #endif
 		MC_printBIG_at(0, MORSE_MONOCHROME_ROW, "__");	// CANCEL shows "__"	 HAS_ePaper || HAS_OLED
 #endif
 	      } else if(morse_PRESENT_COMMAND == "ANY1") {	// '----'
@@ -1744,8 +1310,10 @@ void static morse_token_decode() {	// decode received token sequence
 #endif // USE_MPU6050_at_ADDR
 
 	      } else	// unknown morse command
-		MENU.out("\nCOMMAND:\t"); MENU.outln(morse_PRESENT_COMMAND.c_str());
-	      break;
+		{
+		  DADA("unknown");		MENU.out("\nCOMMAND:\t"); MENU.outln(morse_PRESENT_COMMAND.c_str());
+		}
+		break;
 
 	    default:
 	      ERROR_ln(F("morse_decode type"));
@@ -1757,9 +1325,6 @@ void static morse_token_decode() {	// decode received token sequence
 #if defined HAS_DISPLAY
 	    if(morse_out_buffer_cnt) {
   #if defined HAS_ePaper
-    #if defined MORSE_ePaper_DEBUG	// TODO: REMOVE
-	      DADA("ePaper UNKNOWN");
-    #endif
 	      MC_printBIG_at(morse_out_buffer_cnt, MORSE_MONOCHROME_ROW, "'");	// TODO: TEST:	 HAS_ePaper
   #elif defined HAS_OLED
 	      if(monochrome_can_be_used()) {
@@ -1780,17 +1345,10 @@ void static morse_token_decode() {	// decode received token sequence
 	  break;
 
 	case MORSE_TOKEN_separeWord:
-#if defined MORSE_DECODE_DEBUG
-	  MENU.out(F("\tsepareWord "));
-#endif
 	  break;
 
 	case MORSE_TOKEN_loong:
 	  pattern[pattern_length++] = token;
-#if defined MORSE_DECODE_DEBUG
-	  MENU.space(2);
-	  MENU.out(token);
-#endif
 	  break;
 
 	case MORSE_TOKEN_overlong:
@@ -1809,25 +1367,6 @@ void static morse_token_decode() {	// decode received token sequence
     morse_token_cnt=0;
   } // if(morse_token_cnt)
 } // morse_token_decode()
-
-
-// not used
-// void morse_show_tokens_of_letter(char c, uint8_t row=0) {	// uppercase only
-//   int maxlen=17;
-//   char txt[maxlen]= {0};
-//   char* format = F("%c %s");
-//   for(int i=0; i < MORSE_DEFINITIONS; i++) {
-//     morse_read_definition(i);
-//     if(morse_PRESENT_UPPER_Letter == c) {	// uppercase only
-//       snprintf(txt, maxlen, format, morse_PRESENT_UPPER_Letter, morse_DEFINITION_TOKENS.c_str());
-//       extern uint8_t /*next_row*/ extended_output(char* data, uint8_t col=0, uint8_t row=0, bool force=false);
-//       extended_output(txt, 0, row, false);
-//       MENU.ln();
-//
-//       break;
-//     }
-//   }
-// } // morse_show_tokens_of_letter()
 
 
 #if defined COMPILE_MORSE_CHEAT_SHEETS && defined HAS_DISPLAY
@@ -1871,9 +1410,6 @@ void show_cheat_sheet() {
 	extern uint8_t /*next_row*/ monochrome_big_or_multiline(int row, const char* str);
 	monochrome_big_or_multiline(2*i, result);
 #elif defined HAS_ePaper
-  #if defined MORSE_ePaper_DEBUG	// TODO: REMOVE
-	DADA("ePaper CHEAT sheet");
-  #endif
 	ePaper_BIG_or_multiline(i, result);	 // HAS_ePaper
 #endif
 	MENU.outln(result);
