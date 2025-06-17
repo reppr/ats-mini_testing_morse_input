@@ -356,11 +356,6 @@ void setup()
   netInit(wifiModeIdx);
 
 /* **************** Menu and morse **************** */
-#if defined USE_MORSE
-  setup_HARDWARE_data();
-  morse_init();
-#endif
-
 #if defined USE_MENU_reppr
   #if defined HAS_D_MENU
     MENU.add_page("Developpers Menu", 'D', &D_menu_display, &D_menu_reaction, 'A');
@@ -374,9 +369,14 @@ void setup()
     MENU.add_page("Arduino Softboard", 'H', &softboard_display, &softboard_reaction, 'X');
   #endif
 
-  MENU.menu_display();		// display menu at startup	MAYBE, maybe not?
+//  MENU.menu_display();		// display menu at startup?	MAYBE, maybe not?
 #endif
   /* ************************************** */
+
+#if defined USE_MORSE
+  setup_HARDWARE_data();
+  morse_init();
+#endif
 }
 
 
