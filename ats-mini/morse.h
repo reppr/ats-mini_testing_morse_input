@@ -411,16 +411,16 @@ void morse_input_duration_feedback(void* dummy) {	// s3 version: CONFIG_IDF_TARG
     give status feedback while the morse key is pressed: when is DASH complete and LOONG has started?  etc
   */
   // signal_morse_in('S');	'S' means START new task and signal ON	// was called by touch_morse_ISR_v3()
-  if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+  if(touchInterruptGetLastStatus(HARDWARE.morse_touch_input_pin)) {	// looks STILL TOUCHED
     //vTaskDelay((TickType_t) (dashTim * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));	// ignore beginning of the DASH
 
     vTaskDelay((TickType_t) (limit_dash_loong * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));	// react on LOONG now
-    if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+    if(touchInterruptGetLastStatus(HARDWARE.morse_touch_input_pin)) {	// looks STILL TOUCHED
 #if defined MORSE_OUTPUT_PIN				// blinkOFF as a sign LOONG has been reached
       // *ONLY* MAKES SENSE WITH A LED OUTPUT: MORSE_OUTPUT_PIN
       signal_morse_in('0');	// '0' means just switch signal		// OFF for a short blinkOFF
       vTaskDelay((TickType_t) 100 / portTICK_PERIOD_MS);		// blinkOFF when dash has ended
-      if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED, is in LOONG and then OVERLONG
+      if(touchInterruptGetLastStatus(HARDWARE.morse_touch_input_pin)) {	// looks STILL TOUCHED, is in LOONG and then OVERLONG
 	signal_morse_in('+');	// '+' means just switch signal ON again
       }
       // else  signal_morse_in('X');	// 'X' means STOP task and signal OFF	will be called by touch_morse_ISR_v3()
@@ -451,7 +451,7 @@ void IRAM_ATTR touch_morse_ISR_v3() {	// s3 ISR for CONFIG_IDF_TARGET_ESP32S3 to
   morse_events_cbuf[morse_events_write_i].time = now;	// save time
 
   // >>>>>>>>>>>>>>>> TOUCHED? <<<<<<<<<<<<<<<<
-  if (touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {
+  if (touchInterruptGetLastStatus(HARDWARE.morse_touch_input_pin)) {
     morse_events_cbuf[morse_events_write_i].type = 1 /*touched*/;
     signal_morse_in('S');		// 'S' means START a new token
 
@@ -1178,7 +1178,7 @@ bool morse_store_and_show_received_letter(char letter) {	// returns error
     morse_output_buffer[morse_out_buffer_cnt++] = letter;
     morse_output_buffer[morse_out_buffer_cnt]='\0';	// append '\0' just in case ;)
 #if defined MORSE_MODIFICATED_DISPLAY	// gadget specific morse display code defined?
-  #include MORSE_MODIFICATED_DISPLAY	// insert alternative code to display morse output
+  #include MORSE_MODIFICATED_DISPLAY	//  alternative code to display morse output
 #endif
     return 0;	// ok
   }

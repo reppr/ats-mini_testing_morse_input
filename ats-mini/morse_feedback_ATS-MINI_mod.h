@@ -87,14 +87,14 @@ void morse_input_duration_feedback(void* dummy) {	// s3 version: CONFIG_IDF_TARG
   // test different algorithms for morse key pressed duration feedback	// TODO: REMOVE	DEVELOPMENT ONLY
   if(morse_sep_algo==1) { // Tims
     vTaskDelay((TickType_t) (dotTim * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));
-    if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+    if(touchInterruptGetLastStatus(HARDWARE.morse_touch_input_pin)) {	// looks STILL TOUCHED
       signal_morse_in('-');
       vTaskDelay((TickType_t) (dashTim * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));	// react on LOONG now
 
-      if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+      if(touchInterruptGetLastStatus(HARDWARE.morse_touch_input_pin)) {	// looks STILL TOUCHED
 	signal_morse_in('!');	// '!' means LOONG has started
 	vTaskDelay((TickType_t) (loongTim * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));	// react on OVERLONG now
-	if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+	if(touchInterruptGetLastStatus(HARDWARE.morse_touch_input_pin)) {	// looks STILL TOUCHED
 	  signal_morse_in('V');	// 'V' means OVERLONG has started
 	}
       }
@@ -102,42 +102,42 @@ void morse_input_duration_feedback(void* dummy) {	// s3 version: CONFIG_IDF_TARG
   } else
     if(morse_sep_algo==2) {	// algorhythm "limits"
       vTaskDelay((TickType_t) (limit_dot_dash * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));
-      if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+      if(touchInterruptGetLastStatus(HARDWARE.morse_touch_input_pin)) {	// looks STILL TOUCHED
 	signal_morse_in('-');
 	vTaskDelay((TickType_t) (limit_dash_loong * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));	// react on LOONG now
 
-	if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+	if(touchInterruptGetLastStatus(HARDWARE.morse_touch_input_pin)) {	// looks STILL TOUCHED
 	  signal_morse_in('!');	// '!' means LOONG has started
 	  vTaskDelay((TickType_t) (limit_loong_overlong * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));	// react on OVERLONG now
-	  if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+	  if(touchInterruptGetLastStatus(HARDWARE.morse_touch_input_pin)) {	// looks STILL TOUCHED
 	    signal_morse_in('V');	// 'V' means OVERLONG has started
 	  }
 	}
       }
     } else if(morse_sep_algo==3) { // algorhythm "diff"
       vTaskDelay((TickType_t) (dotTim * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));
-      if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {		// looks STILL TOUCHED
+      if(touchInterruptGetLastStatus(HARDWARE.morse_touch_input_pin)) {		// looks STILL TOUCHED
 	signal_morse_in('-');
 	vTaskDelay((TickType_t) ((dashTim - dotTim) * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));	// react on LOONG now
 
-	if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+	if(touchInterruptGetLastStatus(HARDWARE.morse_touch_input_pin)) {	// looks STILL TOUCHED
 	  signal_morse_in('!');	// '!' means LOONG has started
 	  vTaskDelay((TickType_t) ((loongTim - dashTim - dotTim) * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));	// react on OVERLONG now
-	  if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+	  if(touchInterruptGetLastStatus(HARDWARE.morse_touch_input_pin)) {	// looks STILL TOUCHED
 	    signal_morse_in('V');	// 'V' means OVERLONG has started
 	  }
 	}
       }
   } else if(morse_sep_algo==4) { // algorhythm "diff with limits"	>>>>>>>>>>>>>>>> LOOKS LIKE THE BEST, TEST <<<<<<<<<<<<<<<<
       vTaskDelay((TickType_t) (limit_dot_dash * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));
-      if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+      if(touchInterruptGetLastStatus(HARDWARE.morse_touch_input_pin)) {	// looks STILL TOUCHED
 	signal_morse_in('-');
 	vTaskDelay((TickType_t) ((limit_dash_loong - limit_dot_dash) * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));	// react on LOONG now
 
-	if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+	if(touchInterruptGetLastStatus(HARDWARE.morse_touch_input_pin)) {	// looks STILL TOUCHED
 	  signal_morse_in('!');	// '!' means LOONG has started
 	  vTaskDelay((TickType_t) ((limit_loong_overlong - limit_dash_loong) * morse_TimeUnit / 1000 / portTICK_PERIOD_MS));	// react on OVERLONG now
-	  if(touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {	// looks STILL TOUCHED
+	  if(touchInterruptGetLastStatus(HARDWARE.morse_touch_input_pin)) {	// looks STILL TOUCHED
 	    signal_morse_in('V');	// 'V' means OVERLONG has started
 	  }
 	}
@@ -168,7 +168,7 @@ void IRAM_ATTR touch_morse_ISR_v3() {	// s3 ISR for CONFIG_IDF_TARGET_ESP32S3 to
   morse_events_cbuf[morse_events_write_i].time = now;	// save time
 
   // >>>>>>>>>>>>>>>> TOUCHED? <<<<<<<<<<<<<<<<<
-  if (touchInterruptGetLastStatus(MORSE_TOUCH_INPUT_PIN)) {
+  if (touchInterruptGetLastStatus(HARDWARE.morse_touch_input_pin)) {
     morse_events_cbuf[morse_events_write_i].type = 1 /*touched*/;
     signal_morse_in('S');		// 'S' means START a new token
 
