@@ -167,9 +167,14 @@ SI4735_fixed rx;
 
 /* ************************************** */
 #if defined USE_MORSE
-#include "pulses_HARDWARE_conf.h"	// some HARDWARE must be known early	*can be managed by nvs*
 
-pulses_hardware_conf_t HARDWARE;	// hardware of this instrument
+typedef struct hardware_conf_t {	// fake pulses_hardware_conf
+  // morse:
+  uint16_t touch_threshold=ILLEGAL16;
+  uint8_t morse_touch_input_pin=ILLEGAL8;
+} hardware_conf_t;
+
+hardware_conf_t HARDWARE;
 
 void setup_HARDWARE_data() {
 #define MORSE_TOUCH_INPUT_PIN	11
