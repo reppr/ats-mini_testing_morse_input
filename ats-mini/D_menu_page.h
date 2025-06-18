@@ -24,6 +24,8 @@ extern unsigned long morse_TimeUnit;
 
 extern uint8_t morse_sep_algo;
 
+extern hardware_conf_t HARDWARE;
+
 void D_menu_display() {
   #if defined RUNNING_ON_ATS_MINI
     MENU.outln(F("\tESP32-SI4732 Receiver\n"));
@@ -37,6 +39,7 @@ void D_menu_display() {
   MENU.tab();
   MENU.outln(morse_text_Y);
   MENU.ln();
+  MENU.outln(F("\t'E' test MORSE_MODIFICATED_DISPLAY\t'D' drawString()\n"));
 
   MENU.outln(F("\tfilled Circle:\t'C'"));
   MENU.outln(F("\t'x'\t'y'\t'r'"));
@@ -54,6 +57,10 @@ void D_menu_display() {
 
   MENU.out(F("\talgorithm '1'=tims '2'=limits '3'=diff '4'=limit diffs\t: "));
   MENU.outln(morse_sep_algo);
+
+  MENU.out(F("\n\t'P'=morse touch pin\t: "));
+  MENU.outln(HARDWARE.morse_touch_input_pin);
+
 } // D_menu_display()
 
 
@@ -85,6 +92,13 @@ bool D_menu_reaction(char token) {
   case 'D':
     spr.drawString((char*) morse_output_buffer, morse_text_X, morse_text_Y, 1);
     spr.pushSprite(0, 0);
+    break;
+
+  case 'P': // HARDWARE.morse_touch_input_pin
+    touchDetachInterrupt(HARDWARE.morse_touch_input_pin);						// Detach old pin
+    HARDWARE.morse_touch_input_pin = (uint8_t) MENU.calculate_input(HARDWARE.morse_touch_input_pin);
+    touchAttachInterrupt(HARDWARE.morse_touch_input_pin, touch_morse_ISR_v3, HARDWARE.touch_threshold); // Attach new pin
+    MENU.outln(HARDWARE.morse_touch_input_pin);
     break;
 
   case '1':

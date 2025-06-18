@@ -159,10 +159,9 @@ SI4735_fixed rx;
     #include "ats_menupage.h"
   #endif
 
-  #if defined HAS_D_MENU
-    #include "D_menu_page.h"
-  #endif
-
+//  #if defined HAS_D_MENU
+//    #include "D_menu_page.h"
+//  #endif
 #endif
 
 /* ************************************** */
@@ -216,6 +215,10 @@ void ERROR_ln(const char* text) {	// extended error reporting on MENU, ePaper or
 } // ERROR_ln() borrowed from pulses.ino
 
   #include "morse.h"
+
+  #if defined HAS_D_MENU	// do that now  (needs hardware_conf_t HARDWARE)
+    #include "D_menu_page.h"
+  #endif
 #endif // USE_MORSE
 /* ************************************** */
 
