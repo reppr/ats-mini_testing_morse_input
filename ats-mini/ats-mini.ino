@@ -14,6 +14,10 @@
 #if defined USE_MORSE
   #define TOKEN_LENGTH_FEEDBACK_TASK
   #define MORSE_MODIFICATED_FEEDBACK	"morse_feedback_ATS-MINI_mod.h"
+  #define MORSE_MODIFICATED_DISPLAY	"morse_modified_display_ATS-MINI.h"
+
+  int16_t morse_text_X=140;
+  int16_t morse_text_Y=24;
 #endif
 
 #if ! defined NOOP_FAKE_F_MACRO_INSTALLED	// probably obsolete, leave it in to make it more robust

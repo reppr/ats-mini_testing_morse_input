@@ -17,27 +17,28 @@ extern uint32_t morse_feedback_COLOR_OVERLONG;
 
 extern void signal_morse_in(uint8_t token);
 
+extern int16_t morse_text_X;
+extern int16_t morse_text_Y;
+
 extern unsigned long morse_TimeUnit;
 
 extern uint8_t morse_sep_algo;
 
 void D_menu_display() {
   #if defined RUNNING_ON_ATS_MINI
-    MENU.outln(F("\tESP32-SI4732 Receiver"));
+    MENU.outln(F("\tESP32-SI4732 Receiver\n"));
   #else
     DADA(F("unknown gadget"));
   #endif
 
-  MENU.outln(F("\tmorse feedback:\tX<nnn>\tY<nnn>\tR<nnn>"));
+  MENU.outln(F("\tmorse text:\tA<nnn>\tB<nnn>"));
   MENU.out(F("\t\t\t"));
-  MENU.out(morse_feedback_X);
+  MENU.out(morse_text_X);
   MENU.tab();
-  MENU.out(morse_feedback_Y);
-  MENU.tab();
-  MENU.outln(morse_feedback_R);
-  MENU.outln(F("\tmorse feedback: 0\t.\t-\t!\tV"));
+  MENU.outln(morse_text_Y);
+  MENU.ln();
 
-  MENU.outln(F("\n\tfilled Circle:\t'C'"));
+  MENU.outln(F("\tfilled Circle:\t'C'"));
   MENU.outln(F("\t'x'\t'y'\t'r'"));
   MENU.tab();
   MENU.out(morse_feedback_X);
@@ -60,6 +61,32 @@ bool D_menu_reaction(char token) {
   long newValue;
 
   switch (token) {
+  case 'A': // morse_text_X
+    morse_text_X = (int32_t) MENU.calculate_input(morse_text_X);
+    //spr.setTextColor(TH.funit_text, TH.bg);
+    spr.drawString("TiriTummDee", morse_text_X, morse_text_Y, 1);
+    spr.pushSprite(0, 0);
+    //drawText("GUGUSELI", morse_text_X, morse_text_Y, 1);
+    MENU.outln(morse_text_X);
+    break;
+  case 'B': // morse_text_Y
+    morse_text_Y = (int32_t) MENU.calculate_input(morse_text_Y);
+    //spr.setTextColor(TH.funit_text, TH.bg);
+    spr.drawString("LirumLarum", morse_text_X, morse_text_Y, 1);
+    spr.pushSprite(0, 0);
+    //drawText("dada", morse_text_X, morse_text_Y, 1);
+    MENU.outln(morse_text_Y);
+    break;
+#if defined MORSE_MODIFICATED_DISPLAY
+  case 'E':
+    #include MORSE_MODIFICATED_DISPLAY
+    break;
+#endif
+  case 'D':
+    spr.drawString((char*) morse_output_buffer, morse_text_X, morse_text_Y, 1);
+    spr.pushSprite(0, 0);
+    break;
+
   case '1':
     morse_sep_algo=1;
     break;

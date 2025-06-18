@@ -35,6 +35,15 @@ using std::string;
   #define MORSE_TOUCH_INPUT_PIN	13	// use ESP32 touch sensor as morse input	(13 just a test)
 #endif
 
+
+// need that early:
+#ifndef MORSE_OUTPUT_BUFFER_SIZE
+  #define MORSE_OUTPUT_BUFFER_SIZE	64	// size of morse output buffer
+#endif
+char  morse_output_buffer[MORSE_OUTPUT_BUFFER_SIZE]={'0'};	// buffer
+short morse_out_buffer_cnt=0;
+
+
 bool morse_uppercase=true;	// lowercase very rarely used, changed many menu interfaces
 // menu interface is case sensitive, so I need lowercase
 
@@ -1054,11 +1063,14 @@ int morse_find_definition(const char* pattern) {  // returns index in morse_defi
 
 /* **************************************************************** */
 
-#ifndef MORSE_OUTPUT_BUFFER_SIZE
-  #define MORSE_OUTPUT_BUFFER_SIZE	64	// size of morse output buffer
-#endif
-char  morse_output_buffer[MORSE_OUTPUT_BUFFER_SIZE]={'0'};	// buffer
-short morse_out_buffer_cnt=0;
+/*
+  already declared, see: 'need that early'
+  #ifndef MORSE_OUTPUT_BUFFER_SIZE
+    #define MORSE_OUTPUT_BUFFER_SIZE	64	// size of morse output buffer
+  #endif
+  char  morse_output_buffer[MORSE_OUTPUT_BUFFER_SIZE]={'0'};	// buffer
+  short morse_out_buffer_cnt=0;
+*/
 
 volatile bool morse_trigger_KB_macro = false;		// triggers morse_PLAY_input_KB_macro()
 
@@ -1165,6 +1177,9 @@ bool morse_store_and_show_received_letter(char letter) {	// returns error
   if(morse_out_buffer_cnt < MORSE_OUTPUT_BUFFER_SIZE) {
     morse_output_buffer[morse_out_buffer_cnt++] = letter;
     morse_output_buffer[morse_out_buffer_cnt]='\0';	// append '\0' just in case ;)
+#if defined MORSE_MODIFICATED_DISPLAY	// gadget specific morse display code defined?
+  #include MORSE_MODIFICATED_DISPLAY	// insert alternative code to display morse output
+#endif
     return 0;	// ok
   }
 
