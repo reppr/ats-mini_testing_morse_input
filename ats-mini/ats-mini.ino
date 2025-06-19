@@ -389,8 +389,13 @@ void setup()
   /* ************************************** */
 
 #if defined USE_MORSE
-  setup_HARDWARE_data();
-  morse_init();
+    while(!Serial) {	// without that output of morse_init() will end up as menu *INPUT*
+      yield();
+      delay(100);
+    }
+
+    setup_HARDWARE_data();
+    morse_init();
 #endif
 }
 
