@@ -367,6 +367,9 @@ void setup()
   // Connect WiFi, if necessary
   netInit(wifiModeIdx);
 
+  // Start Bluetooth LE, if necessary
+  bleInit(bleModeIdx);
+
 /* **************** Menu and morse **************** */
 #if defined USE_MENU_reppr
   #if defined HAS_D_MENU
@@ -858,6 +861,8 @@ void loop()
   #endif
 /* ************************************** */
 #endif
+
+  int ble_event = bleDoCommand(bleModeIdx);
 
   // Block encoder rotation when in the locked sleep mode
   if(encoderCount && sleepOn() && sleepModeIdx==SLEEP_LOCKED) encoderCount = 0;
